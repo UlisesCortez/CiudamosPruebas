@@ -1,18 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text,Image, PermissionsAndroid, Platform, ActivityIndicator } from 'react-native';
+// src/screens/WelcomeScreen.tsx
+
+import React, { useEffect, useState, useContext } from 'react';
+import {
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  PermissionsAndroid,
+  Platform,
+  TouchableOpacity,
+  Text,
+  Image,
+} from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
-import ButtonReportAccidents from '../presentation/components/ui/ButtonReportAccident';
 import ProfileCircle from '../presentation/components/ui/ProfileCircle';
-import BottonMenu from '../presentation/components/ui/ButtonMenu';
+import BottonMenu    from '../presentation/components/ui/ButtonMenu';
+import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 
+const PANEL_HEIGHT = 300;  // un poco más alto
 
-const WelcomeScreen = () => {
-  const [region, setRegion] = useState<Region | null>(null);
-  const [loading, setLoading] = useState(true);
+const WelcomeScreen: React.FC = () => {
+  const [region, setRegion]     = useState<Region | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [selected, setSelected] = useState<ReportMarker | null>(null);
+  const { markers }             = useContext(MarkersContext);
 
   useEffect(() => {
-    const requestLocationPermission = async () => {
+    (async () => {
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
@@ -22,78 +36,107 @@ const WelcomeScreen = () => {
             buttonPositive: 'Aceptar',
           }
         );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          setLoading(false);
+          return;
+        }
       }
 
-      // Obtener ubicación inmediatamente
       Geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
+        ({ coords }) => {
           setRegion({
-            latitude,
-            longitude,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           });
           setLoading(false);
         },
-        (error) => {
-          console.error('Error al obtener ubicación inicial:', error);
+        error => {
+          console.error('Error al obtener ubicación:', error);
           setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
 
       const watchId = Geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setRegion({
-            latitude,
-            longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          });
+        ({ coords }) => {
+          setRegion(prev =>
+            prev
+              ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
+              : null
+          );
         },
-        (error) => console.error('Error de actualización de ubicación:', error),
-        { enableHighAccuracy: true, distanceFilter: 10, interval: 5000, fastestInterval: 2000 }
+        error => console.error('Error de ubicación continua:', error),
+        { enableHighAccuracy: true, distanceFilter: 10, interval: 5000 }
       );
 
       return () => Geolocation.clearWatch(watchId);
-    };
-
-    requestLocationPermission();
+    })();
   }, []);
+
+  if (!region || loading) {
+    return (
+      <ActivityIndicator
+        style={styles.loader}
+        size="large"
+        color="#007AFF"
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {region ? (
-        <MapView
-          provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          region={region}
-          showsUserLocation
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        region={region}
+      >
+        {/* Dot azul para la ubicación actual */}
+        <Marker
+          coordinate={region}
+          anchor={{ x: 0.5, y: 0.5 }}
         >
-          <Marker coordinate={region} title="Tú encuentras aquí" />
+          <View style={styles.userDot} />
+        </Marker>
 
-        </MapView>
+        {/* Pins de reportes con onPress */}
+        {markers.map(m => (
+          <Marker
+            key={m.id}
+            coordinate={{ latitude: m.latitude, longitude: m.longitude }}
+            pinColor={m.color || 'red'}
+            onPress={() => setSelected(m)}
+          />
+        ))}
+      </MapView>
 
-        
-      ) : (
-        <ActivityIndicator size="large" color="#007AFF" style={styles.loader} />
-      )}
-      
       <ProfileCircle />
-      
-      <View style={styles.floatingButton}>
-        <ButtonReportAccidents navigateTo='Report'/>
+
+      {/* Botón de menú (tres rayitas) */}
+      <View style={styles.floatingButtonMenu}>
+        <BottonMenu/>
       </View>
 
-      <View  style={styles.floatingButtonMenu} >
-      <BottonMenu navigateTo='Menu' />
-      </View>
-
-
-
+      {/* Panel inferior con detalle del reporte */}
+      {selected && (
+        <View style={styles.bottomPanel}>
+          <Text style={styles.panelTitle}>{selected.title}</Text>
+          <Text style={styles.panelDesc}>{selected.description}</Text>
+          <Text style={styles.panelTime}>
+            {new Date(selected.timestamp).toLocaleString()}
+          </Text>
+          {selected.photoUri && (
+            <Image source={{ uri: selected.photoUri }} style={styles.panelImage} />
+          )}
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setSelected(null)}
+          >
+            <Text style={styles.closeText}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -112,17 +155,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
-  floatingButton: {
-    position: 'absolute',
-    top: '85%',
-    alignSelf: 'center',
+  userDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#007AFF',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-
   floatingButtonMenu: {
     position: 'absolute',
     top: '3%',
-    left:'5%',
+    left: '5%',
   },
-  
+  bottomPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: PANEL_HEIGHT,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 5,
+  },
+  panelTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  panelDesc: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  panelTime: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  panelImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  closeButton: {
+    alignSelf: 'center',
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+    backgroundColor: '#eee',
+    borderRadius: 20,
+  },
+  closeText: {
+    color: '#333',
+    fontWeight: '600',
+  },
 });

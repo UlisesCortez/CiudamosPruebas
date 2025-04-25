@@ -1,16 +1,18 @@
+// src/CIUDAMOS.tsx
+
 import 'react-native-gesture-handler';
-
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import {Navigator} from './presentation/navigator/Navigator'
 
-//Utilizar esta forma de exportacion para evitar fallos a la hora de que la aplicacion busque. 
-//Puede ser export antes del la variable o incluso despues 
-export const CIUDAMOS = () => {
-  return (
+import { MarkersProvider } from './context/MarkersContext';
+import RootNavigator    from './presentation/navigator/RootNavigator';
+
+const CIUDAMOS: React.FC = () => (
+  <MarkersProvider>
     <NavigationContainer>
-      <Navigator />
+      <RootNavigator />
     </NavigationContainer>
-   
-  );
-};
+  </MarkersProvider>
+);
+
 export default CIUDAMOS;

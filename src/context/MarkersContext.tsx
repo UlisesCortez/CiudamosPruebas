@@ -3,6 +3,7 @@
 import React, { createContext, useState, useEffect, ReactNode, FC } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Extiende tu tipo Marker para incluir timestamp
 export interface Marker {
   id: string;
   latitude: number;
@@ -11,11 +12,15 @@ export interface Marker {
   description: string;
   photoUri?: string;
   color?: string;
+  timestamp: number;       // <-- hora en ms desde 1970
 }
+
+// El addMarker ahora recibe todo excepto timestamp
+type NewMarker = Omit<Marker, 'timestamp'>;
 
 interface MarkersContextData {
   markers: Marker[];
-  addMarker: (marker: Marker) => void;
+  addMarker: (marker: NewMarker) => void;
 }
 
 export const MarkersContext = createContext<MarkersContextData>({
@@ -27,24 +32,30 @@ interface Props { children: ReactNode; }
 export const MarkersProvider: FC<Props> = ({ children }) => {
   const [markers, setMarkers] = useState<Marker[]>([]);
 
-  // Clave para AsyncStorage
   const STORAGE_KEY = '@CiudamosMaps:markers';
 
-  // 1) Al montar, carga los marcadores guardados
+  // Al montar, carga marcadores del storage
   useEffect(() => {
     (async () => {
       try {
         const json = await AsyncStorage.getItem(STORAGE_KEY);
-        if (json) setMarkers(JSON.parse(json));
+        if (json) {
+          const stored: Marker[] = JSON.parse(json);
+          setMarkers(stored);
+        }
       } catch (err) {
         console.error('Error cargando marcadores de storage:', err);
       }
     })();
   }, []);
 
-  // 2) Función que añade un marcador y lo persiste
-  const addMarker = async (marker: Marker) => {
-    const updated = [...markers, marker];
+  // Añade timestamp y persiste
+  const addMarker = async (markerData: NewMarker) => {
+    const newMarker: Marker = {
+      ...markerData,
+      timestamp: Date.now(), 
+    };
+    const updated = [...markers, newMarker];
     setMarkers(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
