@@ -19,7 +19,7 @@ const ReportAccidents = ({navigateTo}: Props) => {
 
   return (
     <TouchableOpacity style={styles.button} onPress={handlePress}>
-      <View style={styles.content}>
+      <View style={styles.content}> 
         <WarningIcon />
         <Text style={styles.text}>Reportar Incidente</Text>
       </View>

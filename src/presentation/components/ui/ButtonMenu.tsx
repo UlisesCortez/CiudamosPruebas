@@ -1,9 +1,10 @@
 // src/presentation/components/ui/ButtonMenu.tsx
 
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { MenuIcon } from '../../icons/icons';
 
 interface Props {
   // ya no necesitamos navigateTo genérico, siempre va a Menu
@@ -19,7 +20,25 @@ export default function ButtonMenu(_: Props) {
         navigation.getParent()?.navigate('Menu');
       }}
     >
-      <Icon name="menu" size={28} color="#000" />
+      <View style = {styles.button}>
+        <MenuIcon/>
+      </View>
+   
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    backgroundColor: 'rgba(255, 255, 255, 0.89)',
+    borderRadius: 20,
+    //width:40,
+    //height:40,
+    alignItems:'center',
+    alignContent: 'center',
+    alignSelf: 'center',
+    
+  
+  },
+});
+

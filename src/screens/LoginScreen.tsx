@@ -30,7 +30,8 @@ export const LoginScreen = () => {
                  )}
               </View>
 
-              <MyButton title="Ingresar" navigateTo="Welcome" />
+              <MyButton title="Ingresar" navigateTo="Tabs" />
+
      
               <View >
                 <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>

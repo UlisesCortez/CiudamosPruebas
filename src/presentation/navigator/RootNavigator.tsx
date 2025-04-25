@@ -4,25 +4,31 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import MainTabNavigator from './MainTabNavigator';
-import MenuScreen       from '../../screens/MenuScreen';  // tu vista de ajustes
+import MenuScreen       from '../../screens/MenuScreen';  
+import LoginScreen from '../../screens/LoginScreen'; 
+
 
 
 export type RootStackParamList = {
+    Login: undefined;  
     Tabs: undefined;
     Menu: undefined;
-    Profile: undefined;      // ← Agregado
-    Settings: undefined;     // ← Agregado
-    Help: undefined;         // ← Agregado
+    Profile: undefined;      
+    Settings: undefined;     
+    Help: undefined;         
   };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    {/* 1) Tu bottom-tabs sin header */}
+    {/* 1) LoginScreen */}
+    <Stack.Screen name="Login" component={LoginScreen} />
+
+    {/* 2) Tu bottom-tabs sin header */}
     <Stack.Screen name="Tabs" component={MainTabNavigator} />
 
-    {/* 2) Tu pantalla de ajustes */}
+    {/* 3) Tu pantalla de ajustes */}
     <Stack.Screen
       name="Menu"
       component={MenuScreen}
