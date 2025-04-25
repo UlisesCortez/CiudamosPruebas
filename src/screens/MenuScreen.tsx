@@ -1,54 +1,57 @@
 // src/screens/MenuScreen.tsx
 
-import React, { useContext } from 'react';
+import React from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
-  FlatList,
-  ListRenderItem
+  Alert
 } from 'react-native';
-import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { RootStackParamList } from '../presentation/navigator/RootNavigator';
 
-const MenuScreen: React.FC = () => {
-  const { markers } = useContext(MarkersContext);
+type MenuOption = {
+  label: string;
+  route?: keyof RootStackParamList;
+  action?: () => void;
+};
 
-  // Tipamos correctamente el renderItem para ReportMarker
-  const renderItem: ListRenderItem<ReportMarker> = ({ item }) => (
-    <View style={styles.row}>
-      <Text style={styles.cell}>{item.title}</Text>
-      <Text style={styles.cell}>
-        {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
-      </Text>
-      <Text style={styles.cell}>
-        {new Date(item.timestamp).toLocaleString()}
-      </Text>
-    </View>
-  );
+export default function MenuScreen() {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+
+  const options: MenuOption[] = [
+    { label: 'Mi Perfil', route: 'Profile' },
+    { label: 'Configuración', route: 'Settings' },
+    { label: 'Ayuda', route: 'Help' },
+    {
+      label: 'Cerrar Sesión',
+      action: () => Alert.alert('Sesión', 'Cerrando sesión...'),
+    },
+  ];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Reportes Generados</Text>
+      <Text style={styles.title}>Menú</Text>
 
-      <View style={[styles.row, styles.headerRow]}>
-        <Text style={[styles.cell, styles.headerCell]}>Tipo</Text>
-        <Text style={[styles.cell, styles.headerCell]}>Ubicación</Text>
-        <Text style={[styles.cell, styles.headerCell]}>Hora</Text>
-      </View>
-
-      <FlatList
-        data={markers}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No hay reportes aún</Text>
-        }
-      />
+      {options.map(opt => (
+        <TouchableOpacity
+          key={opt.label}
+          style={styles.option}
+          onPress={() => {
+            if (opt.route) {
+              navigation.navigate(opt.route);
+            } else if (opt.action) {
+              opt.action();
+            }
+          }}
+        >
+          <Text style={styles.optionText}>{opt.label}</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
-};
-
-export default MenuScreen;
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -57,29 +60,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 24,
   },
-  row: {
-    flexDirection: 'row',
-    paddingVertical: 8,
+  option: {
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: '#ccc',
   },
-  headerRow: {
-    borderBottomWidth: 2,
-  },
-  cell: {
-    flex: 1,
-    fontSize: 14,
-  },
-  headerCell: {
-    fontWeight: '700',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: 'gray',
+  optionText: {
+    fontSize: 16,
   },
 });
