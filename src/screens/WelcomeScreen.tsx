@@ -14,74 +14,89 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import ProfileCircle from '../presentation/components/ui/ProfileCircle';
-import BottonMenu    from '../presentation/components/ui/ButtonMenu';
+import BottonMenu from '../presentation/components/ui/ButtonMenu';
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 
-const PANEL_HEIGHT = 300;  // un poco más alto
+const PANEL_HEIGHT = 300;
 
 const WelcomeScreen: React.FC = () => {
-  const [region, setRegion]     = useState<Region | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [region, setRegion] = useState<Region | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
-  const { markers }             = useContext(MarkersContext);
+  const { markers } = useContext(MarkersContext);
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    const requestLocationPermission = async () => {
+      try {
+        if (Platform.OS === 'android') {
+          const granted = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+          ]);
+
+          const fineLocationGranted = granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
+          const coarseLocationGranted = granted[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
+
+          if (!fineLocationGranted && !coarseLocationGranted) {
+            console.warn('Permisos de ubicación no concedidos');
+            setLoading(false);
+            return;
+          }
+        }
+
+        Geolocation.getCurrentPosition(
+          ({ coords }) => {
+            setRegion({
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            });
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error al obtener ubicación:', error);
+            setLoading(false);
+          },
           {
-            title: 'Permiso de ubicación',
-            message: 'La app necesita acceder a tu ubicación.',
-            buttonPositive: 'Aceptar',
+            enableHighAccuracy: true,
+            timeout: 20000,
           }
         );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          setLoading(false);
-          return;
-        }
+
+        const watchId = Geolocation.watchPosition(
+          ({ coords }) => {
+            setRegion((prev) =>
+              prev
+                ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
+                : null
+            );
+          },
+          (error) => console.error('Error de ubicación continua:', error),
+          {
+            enableHighAccuracy: true,
+            distanceFilter: 10,
+            interval: 5000,
+          }
+        );
+
+        return () => {
+          Geolocation.clearWatch(watchId);
+        };
+      } catch (err) {
+        console.error('Error pidiendo permisos de ubicación:', err);
+        setLoading(false);
       }
+    };
 
-      Geolocation.getCurrentPosition(
-        ({ coords }) => {
-          setRegion({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          });
-          setLoading(false);
-        },
-        error => {
-          console.error('Error al obtener ubicación:', error);
-          setLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-
-      const watchId = Geolocation.watchPosition(
-        ({ coords }) => {
-          setRegion(prev =>
-            prev
-              ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
-              : null
-          );
-        },
-        error => console.error('Error de ubicación continua:', error),
-        { enableHighAccuracy: true, distanceFilter: 10, interval: 5000 }
-      );
-
-      return () => Geolocation.clearWatch(watchId);
-    })();
+    requestLocationPermission();
   }, []);
 
   if (!region || loading) {
     return (
-      <ActivityIndicator
-        style={styles.loader}
-        size="large"
-        color="#007AFF"
-      />
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
     );
   }
 
@@ -93,14 +108,16 @@ const WelcomeScreen: React.FC = () => {
         region={region}
       >
         {/* Dot azul para la ubicación actual */}
-        <Marker
-          coordinate={region}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <View style={styles.userDot} />
-        </Marker>
+        {region && (
+          <Marker
+            coordinate={region}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.userDot} />
+          </Marker>
+        )}
 
-        {/* Pins de reportes con onPress */}
+        {/* Pins de reportes */}
         {markers.map(m => (
           <Marker
             key={m.id}
@@ -113,9 +130,9 @@ const WelcomeScreen: React.FC = () => {
 
       <ProfileCircle />
 
-      {/* Botón de menú (tres rayitas) */}
+      {/* Botón de menú */}
       <View style={styles.floatingButtonMenu}>
-        <BottonMenu/>
+        <BottonMenu />
       </View>
 
       {/* Panel inferior con detalle del reporte */}
@@ -147,13 +164,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  map: {
-    flex: 1,
-  },
-  loader: {
+  loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  map: {
+    flex: 1,
   },
   userDot: {
     width: 14,
