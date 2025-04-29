@@ -11,7 +11,7 @@ export const LoginScreen = () => {
   return (   
     <View style={styles.container}>
       <View style = {{marginTop: 1}}>
-        <View style={styles.ellipse} />
+       
           <Image source={require('../presentation/assets/images/LogoDark.png')} style={styles.logo}/>
 
             <View style = {{marginTop: '70%'}}>
@@ -102,8 +102,8 @@ const styles = StyleSheet.create({
       
     },
     logo: {
-      width: 200,
-      height: 200,
+      width: 170,
+      height: 170,
       borderRadius: 120, 
       borderWidth: 3,
       //borderColor: '#00BFFF', 

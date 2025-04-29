@@ -10,14 +10,17 @@ import {
   TouchableOpacity,
   Text,
   Image,
+  ScrollView
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import ProfileCircle from '../presentation/components/ui/ProfileCircle';
 import BottonMenu from '../presentation/components/ui/ButtonMenu';
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
+import ButtonSheet from '../presentation/components/ui/ButtonSheet';
 
-const PANEL_HEIGHT = 300;
+
+const PANEL_HEIGHT = 600;
 
 const WelcomeScreen: React.FC = () => {
   const [region, setRegion] = useState<Region | null>(null);
@@ -137,7 +140,11 @@ const WelcomeScreen: React.FC = () => {
 
       {/* Panel inferior con detalle del reporte */}
       {selected && (
-        <View style={styles.bottomPanel}>
+       
+          <ButtonSheet onClose={() => setSelected(null)}
+            initialHeight={PANEL_HEIGHT}>
+            
+          <ScrollView>
           <Text style={styles.panelTitle}>{selected.title}</Text>
           <Text style={styles.panelDesc}>{selected.description}</Text>
           <Text style={styles.panelTime}>
@@ -146,13 +153,10 @@ const WelcomeScreen: React.FC = () => {
           {selected.photoUri && (
             <Image source={{ uri: selected.photoUri }} style={styles.panelImage} />
           )}
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setSelected(null)}
-          >
-            <Text style={styles.closeText}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
+        
+          </ScrollView>
+          </ButtonSheet>
+     
       )}
     </View>
   );

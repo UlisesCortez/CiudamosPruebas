@@ -1,44 +1,87 @@
 // src/screens/ListaReportesScreen.tsx
 
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  ListRenderItem
+  ActivityIndicator,
 } from 'react-native';
-import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
+import { MarkersContext, Marker } from '../context/MarkersContext';
+
+const GOOGLE_API_KEY = 'AIzaSyC39TwhA5GplXYRHTQ2Ao-s-pmuGyvXjJ0';
 
 const ListaReportesScreen: React.FC = () => {
   const { markers } = useContext(MarkersContext);
+  // guardamos direcciones por id de marcador
+  const [addresses, setAddresses] = useState<Record<string, string>>({});
 
-  const renderItem: ListRenderItem<ReportMarker> = ({ item }) => (
-    <View style={styles.row}>
-      <Text style={styles.cell}>{item.title}</Text>
-      <Text style={styles.cell}>
-        {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
+  // Reverse-geocode al montar / cuando cambian marcadores
+  useEffect(() => {
+    markers.forEach((m) => {
+      if (!addresses[m.id]) {
+        fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${m.latitude},${m.longitude}&key=${GOOGLE_API_KEY}`
+        )
+          .then((res) => res.json())
+          .then((json) => {
+            const calle =
+              json.results?.[0]?.formatted_address ||
+              `${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`;
+            setAddresses((a) => ({ ...a, [m.id]: calle }));
+          })
+          .catch(() => {
+            setAddresses((a) => ({
+              ...a,
+              [m.id]: `${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`,
+            }));
+          });
+      }
+    });
+  }, [markers]);
+
+  const formatDate = (id: string) => {
+    const fecha = new Date(parseInt(id, 10));
+    return fecha.toLocaleString('es-MX', {
+      day:   '2-digit',
+      month: '2-digit',
+      year:  'numeric',
+      hour:    '2-digit',
+      minute:  '2-digit',
+    });
+  };
+
+  const renderItem = ({ item }: { item: Marker }) => (
+    <View style={styles.card}>
+      <Text style={styles.type}>{item.title}</Text>
+      <Text style={styles.address}>
+        {addresses[item.id] ?? 'Cargando dirección...'}
       </Text>
-      <Text style={styles.cell}>
-        {new Date(item.timestamp).toLocaleString()}
-      </Text>
+      <Text style={styles.date}>{formatDate(item.id)}</Text>
     </View>
   );
 
+  if (!markers.length) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyText}>No hay reportes aún.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Reportes Generados</Text>
-      <View style={[styles.row, styles.headerRow]}>
-        <Text style={[styles.cell, styles.headerCell]}>Tipo</Text>
-        <Text style={[styles.cell, styles.headerCell]}>Ubicación</Text>
-        <Text style={[styles.cell, styles.headerCell]}>Hora</Text>
-      </View>
+      <Text style={styles.header}>Reportes Generados</Text>
       <FlatList
         data={markers}
-        keyExtractor={i => i.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No hay reportes aún</Text>
+        ItemSeparatorComponent={() => <View style={styles.spacer} />}
+        ListFooterComponent={() =>
+          markers.some((m) => !addresses[m.id]) ? (
+            <ActivityIndicator style={{ marginTop: 16 }} />
+          ) : null
         }
       />
     </View>
@@ -48,11 +91,52 @@ const ListaReportesScreen: React.FC = () => {
 export default ListaReportesScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  title:     { fontSize: 18, fontWeight: '600', marginBottom: 12 },
-  row:       { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderColor: '#ccc' },
-  headerRow: { borderBottomWidth: 2 },
-  cell:      { flex: 1, fontSize: 14 },
-  headerCell:{ fontWeight: '700' },
-  emptyText: { textAlign: 'center', marginTop: 20, color: 'gray' },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: '#333',
+  },
+  card: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 14,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+  },
+  type: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111',
+    marginBottom: 4,
+  },
+  address: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 6,
+  },
+  date: {
+    fontSize: 12,
+    color: '#888',
+  },
+  spacer: {
+    height: 12,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+  },
 });

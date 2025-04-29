@@ -225,6 +225,15 @@ export const ReportScreen: React.FC = () => {
                   photoUri: photo.uri,
                   color:    pinColor,
                 });
+
+                Alert.alert('Reporte Completo');
+
+                setDescription('');
+                setCategory('');
+                setUrgency('');
+                setPhoto(null);
+                setShowUrgencyOptions(false);
+                setShowCategoryOptions(false);
                 navigation.goBack();
               }}
             >
