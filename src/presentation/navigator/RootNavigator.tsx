@@ -5,7 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import MainTabNavigator from './MainTabNavigator';
 import MenuScreen       from '../../screens/MenuScreen';  
-import LoginScreen from '../../screens/LoginScreen'; 
+import LoginScreen from '../../screens/LoginScreen';
+import RewardsScreen    from '../../screens/RewardsScreen.tsx'; 
 
 
 
@@ -15,7 +16,8 @@ export type RootStackParamList = {
     Menu: undefined;
     Profile: undefined;      
     Settings: undefined;     
-    Help: undefined;         
+    Help: undefined;  
+    Rewards:  undefined;       
   };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -37,6 +39,15 @@ const RootNavigator: React.FC = () => (
         headerTitle: 'Ajustes',
       }}
     />
+
+    <Stack.Screen 
+      name="Rewards"
+      component={RewardsScreen}
+      options={{
+        headerShown: true,
+        headerTitle: 'Recompensas',
+      }}
+      />
   </Stack.Navigator>
 );
 

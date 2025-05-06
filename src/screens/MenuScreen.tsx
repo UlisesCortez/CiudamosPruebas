@@ -22,6 +22,7 @@ export default function MenuScreen() {
 
   const options: MenuOption[] = [
     { label: 'Mi Perfil', route: 'Profile' },
+    { label: 'Recompensas', route: 'Rewards' },
     { label: 'Configuración', route: 'Settings' },
     { label: 'Ayuda', route: 'Help' },
     {

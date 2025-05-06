@@ -223,7 +223,7 @@ export const ReportScreen: React.FC = () => {
                   title:    category,
                   description,
                   photoUri: photo.uri,
-                  color:    pinColor,
+                  color:    undefined,
                 });
 
                 Alert.alert('Reporte Completo');
