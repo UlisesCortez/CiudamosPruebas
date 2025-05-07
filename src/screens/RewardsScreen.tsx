@@ -36,7 +36,7 @@ const RewardsScreen: React.FC = () => {
         <Text style={styles.cardType}>{item.title}</Text>
         <Text style={styles.cardDate}>{formatDate(item.id)}</Text>
       </View>
-      <Text style={styles.cardReward}>+${REWARD_PER_REPORT}</Text>
+      <Text style={styles.cardReward}>+Token {REWARD_PER_REPORT}</Text>
     </View>
   );
 
@@ -46,7 +46,7 @@ const RewardsScreen: React.FC = () => {
 
       <View style={styles.totalContainer}>
         <Text style={styles.totalLabel}>Total ganado</Text>
-        <Text style={styles.totalAmount}>${totalReward}</Text>
+        <Text style={styles.totalAmount}>{totalReward} Token </Text>
       </View>
 
       {markers.length === 0 ? (

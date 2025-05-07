@@ -7,6 +7,7 @@ import MainTabNavigator from './MainTabNavigator';
 import MenuScreen       from '../../screens/MenuScreen';  
 import LoginScreen from '../../screens/LoginScreen';
 import RewardsScreen    from '../../screens/RewardsScreen.tsx'; 
+import RegisterScreen from '../../screens/RegisterScreen'; 
 
 
 
@@ -17,7 +18,8 @@ export type RootStackParamList = {
     Profile: undefined;      
     Settings: undefined;     
     Help: undefined;  
-    Rewards:  undefined;       
+    Rewards:  undefined;    
+    Register: undefined;    
   };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -26,6 +28,8 @@ const RootNavigator: React.FC = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     {/* 1) LoginScreen */}
     <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Screen name="Register" component={RegisterScreen} /> 
+
 
     {/* 2) Tu bottom-tabs sin header */}
     <Stack.Screen name="Tabs" component={MainTabNavigator} />

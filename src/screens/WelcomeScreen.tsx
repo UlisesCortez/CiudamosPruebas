@@ -1,5 +1,3 @@
-// src/screens/WelcomeScreen.tsx
-
 import React, { useEffect, useState, useContext } from 'react';
 import {
   StyleSheet,
@@ -10,7 +8,8 @@ import {
   TouchableOpacity,
   Text,
   Image,
-  ScrollView
+  ScrollView,
+  Dimensions,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
@@ -19,14 +18,15 @@ import BottonMenu from '../presentation/components/ui/ButtonMenu';
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 import ButtonSheet from '../presentation/components/ui/ButtonSheet';
 
-
-const PANEL_HEIGHT = 600;
+const PANEL_HEIGHT = 800;
 
 const WelcomeScreen: React.FC = () => {
   const [region, setRegion] = useState<Region | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
   const { markers } = useContext(MarkersContext);
+
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -77,7 +77,7 @@ const WelcomeScreen: React.FC = () => {
           },
           (error) => console.error('Error de ubicación continua:', error),
           {
-            enableHighAccuracy: true,
+            enableHighAccuracy: false,
             distanceFilter: 10,
             interval: 5000,
           }
@@ -95,6 +95,20 @@ const WelcomeScreen: React.FC = () => {
     requestLocationPermission();
   }, []);
 
+  // Calcula el tamaño de la imagen seleccionada
+  useEffect(() => {
+    if (selected?.photoUri) {
+      Image.getSize(selected.photoUri, (width, height) => {
+        const screenWidth = Dimensions.get('window').width - 32; // márgenes horizontales
+        const scaleFactor = width / screenWidth;
+        const imageHeight = height / scaleFactor;
+        setImageSize({ width: screenWidth, height: imageHeight });
+      }, (error) => {
+        console.warn('No se pudo obtener el tamaño de la imagen:', error);
+      });
+    }
+  }, [selected]);
+
   if (!region || loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -110,7 +124,6 @@ const WelcomeScreen: React.FC = () => {
         style={styles.map}
         region={region}
       >
-        {/* Dot azul para la ubicación actual */}
         {region && (
           <Marker
             coordinate={region}
@@ -120,7 +133,6 @@ const WelcomeScreen: React.FC = () => {
           </Marker>
         )}
 
-        {/* Pins de reportes */}
         {markers.map(m => (
           <Marker
             key={m.id}
@@ -133,30 +145,35 @@ const WelcomeScreen: React.FC = () => {
 
       <ProfileCircle />
 
-      {/* Botón de menú */}
       <View style={styles.floatingButtonMenu}>
         <BottonMenu />
       </View>
 
-      {/* Panel inferior con detalle del reporte */}
       {selected && (
-       
-          <ButtonSheet onClose={() => setSelected(null)}
-            initialHeight={PANEL_HEIGHT}>
-            
+        <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_HEIGHT}>
           <ScrollView>
-          <Text style={styles.panelTitle}>{selected.title}</Text>
-          <Text style={styles.panelDesc}>{selected.description}</Text>
-          <Text style={styles.panelTime}>
-            {new Date(selected.timestamp).toLocaleString()}
-          </Text>
-          {selected.photoUri && (
-            <Image source={{ uri: selected.photoUri }} style={styles.panelImage} />
-          )}
-        
+            <Text style={styles.panelTitle}>{selected.title}</Text>
+            <Text style={styles.panelDesc}>{selected.description}</Text>
+            <Text style={styles.panelTime}>
+              {new Date(selected.timestamp).toLocaleString()}
+            </Text>
+
+            {selected.photoUri && (
+              <Image
+                source={{ uri: selected.photoUri }}
+                style={{
+                  width: imageSize.width,
+                  height: imageSize.height,
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  alignSelf: 'center',
+                  backgroundColor: '#eaeaea',
+                }}
+                resizeMode="contain"
+              />
+            )}
           </ScrollView>
-          </ButtonSheet>
-     
+        </ButtonSheet>
       )}
     </View>
   );
@@ -189,21 +206,6 @@ const styles = StyleSheet.create({
     top: '3%',
     left: '5%',
   },
-  bottomPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: PANEL_HEIGHT,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 5,
-  },
   panelTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -217,23 +219,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 12,
-  },
-  panelImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 6,
-    marginBottom: 12,
-  },
-  closeButton: {
-    alignSelf: 'center',
-    marginTop: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 20,
-    backgroundColor: '#eee',
-    borderRadius: 20,
-  },
-  closeText: {
-    color: '#333',
-    fontWeight: '600',
   },
 });

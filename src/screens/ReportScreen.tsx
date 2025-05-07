@@ -1,5 +1,3 @@
-// src/screens/ReportScreen.tsx
-
 import React, { useEffect, useState, useContext } from 'react';
 import {
   View,
@@ -10,6 +8,7 @@ import {
   Image,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { launchCamera, CameraOptions } from 'react-native-image-picker';
@@ -17,6 +16,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
 import { MarkersContext } from '../context/MarkersContext';
 import ProfileCircle from '../presentation/components/ui/ProfileCircle';
+import notifee, { AndroidImportance } from '@notifee/react-native';
 
 export const ReportScreen: React.FC = () => {
   const { addMarker } = useContext(MarkersContext);
@@ -30,7 +30,6 @@ export const ReportScreen: React.FC = () => {
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const [photo, setPhoto]             = useState<any>(null);
 
-  // Función para determinar el color del pin según urgencia
   const getPinColor = (level: string): string => {
     switch (level) {
       case 'Alta':  return 'red';
@@ -40,7 +39,6 @@ export const ReportScreen: React.FC = () => {
     }
   };
 
-  // Obtiene la ubicación al montar
   useEffect(() => {
     Geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -51,7 +49,6 @@ export const ReportScreen: React.FC = () => {
     );
   }, []);
 
-  // Abre la cámara
   const openCamera = () => {
     const options: CameraOptions = {
       mediaType: 'mixed',
@@ -70,6 +67,22 @@ export const ReportScreen: React.FC = () => {
       }
     });
   };
+
+  const requestPermissionAndCreateChannel = async () => {
+    if (Platform.OS === 'android') {
+      await notifee.requestPermission();
+
+      await notifee.createChannel({
+        id: 'ciudamos-alertas',
+        name: 'Alertas de incidentes',
+        importance: AndroidImportance.HIGH,
+      });
+    }
+  };
+
+  useEffect(() => {
+    requestPermissionAndCreateChannel();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -111,10 +124,10 @@ export const ReportScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Ubicación actual</Text>
           {coords ? (
             <>
-              <Text style={{ color: '#fff' }}>
+              <Text style={{ color: '#000' }}>
                 Latitud: {coords.latitude.toFixed(6)}
               </Text>
-              <Text style={{ color: '#fff' }}>
+              <Text style={{ color: '#000' }}>
                 Longitud: {coords.longitude.toFixed(6)}
               </Text>
             </>
@@ -123,14 +136,13 @@ export const ReportScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Urgencia */}
         <View style={styles.row}>
           <Text style={styles.sectionTitle}>Nivel de urgencia</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowUrgencyOptions(!showUrgencyOptions)}
           >
-            <Text style={{ color: '#fff' }}>
+            <Text style={{ color: '#666' }}>
               {urgency || 'Selecciona urgencia'}
             </Text>
           </TouchableOpacity>
@@ -152,14 +164,13 @@ export const ReportScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Categoría */}
         <View style={styles.row}>
           <Text style={styles.sectionTitle}>Categoría</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowCategoryOptions(!showCategoryOptions)}
           >
-            <Text style={{ color: '#fff' }}>
+            <Text style={{ color: '#666' }}>
               {category || 'Selecciona categoría'}
             </Text>
           </TouchableOpacity>
@@ -181,11 +192,10 @@ export const ReportScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Detalles */}
         <Text style={styles.sectionTitle}>Detalles</Text>
         <TextInput
           style={styles.textArea}
-          placeholderTextColor="#aaa"
+          placeholderTextColor="#666"
           placeholder="Escribe detalles del incidente..."
           multiline
           numberOfLines={4}
@@ -204,44 +214,55 @@ export const ReportScreen: React.FC = () => {
               style={styles.previewImage}
               resizeMode="cover"
             />
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={() => {
-                if (!category.trim()) {
-                  Alert.alert(
-                    'Atención',
-                    'Por favor selecciona una categoría'
-                  );
-                  return;
-                }
-                const pinColor = getPinColor(urgency);
-
-                addMarker({
-                  id: Date.now().toString(),
-                  latitude:  coords!.latitude,
-                  longitude: coords!.longitude,
-                  title:    category,
-                  description,
-                  photoUri: photo.uri,
-                  color:    undefined,
-                });
-
-                Alert.alert('Reporte Completo');
-
-                setDescription('');
-                setCategory('');
-                setUrgency('');
-                setPhoto(null);
-                setShowUrgencyOptions(false);
-                setShowCategoryOptions(false);
-                navigation.goBack();
-              }}
-            >
-              <Text style={styles.submitButtonText}>
-                Subir reporte
-              </Text>
-            </TouchableOpacity>
           </View>
+        )}
+
+        {photo && (
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={async () => {
+              if (!category.trim()) {
+                Alert.alert('Atención', 'Por favor selecciona una categoría');
+                return;
+              }
+
+              const pinColor = getPinColor(urgency);
+
+              addMarker({
+                id: Date.now().toString(),
+                latitude: coords!.latitude,
+                longitude: coords!.longitude,
+                title: category,
+                description,
+                photoUri: photo.uri,
+                color: pinColor,
+                timestamp: new Date().toISOString() 
+              });
+
+              await notifee.displayNotification({
+                title: '🚨 Nuevo incidente reportado',
+                body: `Tipo: ${category} — Ubicación: ${coords?.latitude.toFixed(3)}, ${coords?.longitude.toFixed(3)}`,
+                android: {
+                  channelId: 'ciudamos-alertas',
+                  smallIcon: 'ic_launcher',
+                  importance: AndroidImportance.HIGH,
+                  pressAction: { id: 'default' },
+                },
+              });
+
+              Alert.alert('Reporte Completo');
+
+              setDescription('');
+              setCategory('');
+              setUrgency('');
+              setPhoto(null);
+              setShowUrgencyOptions(false);
+              setShowCategoryOptions(false);
+              navigation.goBack();
+            }}
+          >
+            <Text style={styles.submitButtonText}>Subir reporte</Text>
+          </TouchableOpacity>
         )}
 
       </ScrollView>
@@ -255,7 +276,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#fff',
   },
   headerContainer: {
     marginTop: 90,
@@ -273,12 +294,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 6,
-    color: '#fff',
+    color: '#000',
   },
   subtitle: {
     fontSize: 16,
     marginBottom: 16,
-    color: '#999',
+    color: '#666',
   },
   locationBox: {
     padding: 10,
@@ -290,7 +311,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: 'bold',
     marginBottom: 6,
-    color: '#fff',
+    color: '#000',
   },
   row: {
     marginBottom: 20,
@@ -301,6 +322,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 10,
     marginTop: 6,
+    backgroundColor: '#fff',
   },
   dropdownOptions: {
     borderWidth: 1,
@@ -320,7 +342,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 10,
     textAlignVertical: 'top',
-    color: '#fff',
+    color: '#000',
+    backgroundColor: '#fff',
   },
   uploadButton: {
     backgroundColor: '#007AFF',

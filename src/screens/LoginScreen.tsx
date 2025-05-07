@@ -12,6 +12,7 @@ import {
 import { EyeIcon, EyeOffIcon } from '../presentation/icons/icons';
 import { colors } from '../config/theme/theme';
 import MyButton from '../presentation/components/ui/MyButton';
+import MyButtonRegister from '../presentation/components/ui/MyButtonRegister';
 
 export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -61,10 +62,12 @@ export const LoginScreen: React.FC = () => {
 
       </View>
 
-      <Text style={styles.footer}>
-        ¿No tienes cuenta?{' '}
-        <Text style={styles.register}>Regístrate aquí</Text>
-      </Text>
+      
+          <Text style={styles.footer}>
+            ¿No tienes cuenta?{' '}
+            <MyButtonRegister title=" Regístrate aquí" navigateTo="Register" />
+          </Text>
+        
 
     </View>
   );

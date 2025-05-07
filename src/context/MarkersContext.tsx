@@ -11,6 +11,7 @@ export interface Marker {
   description: string;
   photoUri?: string;
   color?: string;
+  timestamp: string;
 }
 
 interface MarkersContextData {
