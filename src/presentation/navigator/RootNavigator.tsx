@@ -1,58 +1,36 @@
 // src/presentation/navigator/RootNavigator.tsx
-
 import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import MainTabNavigator from './MainTabNavigator';
-import MenuScreen       from '../../screens/MenuScreen';  
 import LoginScreen from '../../screens/LoginScreen';
-import RewardsScreen    from '../../screens/RewardsScreen.tsx'; 
-import RegisterScreen from '../../screens/RegisterScreen'; 
+import RegisterScreen from '../../screens/RegisterScreen';
+import WelcomeScreen from '../../screens/WelcomeScreen';
 
-
+// OJO: ajusta estas rutas a tus componentes reales de Reportar/Reportes
+import ReportScreen from '../../screens/ReportScreen';
+import ReportsScreen from '../../screens/ListaReportesScreen';
 
 export type RootStackParamList = {
-    Login: undefined;  
-    Tabs: undefined;
-    Menu: undefined;
-    Profile: undefined;      
-    Settings: undefined;     
-    Help: undefined;  
-    Rewards:  undefined;    
-    Register: undefined;    
-  };
+  Login: undefined;
+  Register: undefined;
+  Welcome: undefined;
+  Report: undefined;
+  Reports: undefined;
+};
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const RootNavigator: React.FC = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    {/* 1) LoginScreen */}
-    <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="Register" component={RegisterScreen} /> 
-
-
-    {/* 2) Tu bottom-tabs sin header */}
-    <Stack.Screen name="Tabs" component={MainTabNavigator} />
-
-    {/* 3) Tu pantalla de ajustes */}
-    <Stack.Screen
-      name="Menu"
-      component={MenuScreen}
-      options={{
-        headerShown: true,
-        headerTitle: 'Ajustes',
-      }}
-    />
-
-    <Stack.Screen 
-      name="Rewards"
-      component={RewardsScreen}
-      options={{
-        headerShown: true,
-        headerTitle: 'Recompensas',
-      }}
-      />
-  </Stack.Navigator>
-);
-
-export default RootNavigator;
+export default function RootNavigator() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        <Stack.Screen name="Report" component={ReportScreen} />
+        <Stack.Screen name="Reports" component={ReportsScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}

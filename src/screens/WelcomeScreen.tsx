@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import {
   StyleSheet,
   View,
   ActivityIndicator,
   PermissionsAndroid,
   Platform,
-  TouchableOpacity,
   Text,
   Image,
   ScrollView,
@@ -20,6 +19,8 @@ import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContex
 import ButtonSheet from '../presentation/components/ui/ButtonSheet';
 import IconMI from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
 
 const UI = {
   bg: '#F4F7FC',
@@ -30,39 +31,105 @@ const UI = {
   text: '#0D1313',
 };
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 const PANEL_HEIGHT = 800;
 
-/** Estilo de mapa: menos brillo, más contraste suave (desaturado) */
+/** Estilo de mapa claro y legible */
 const MAP_STYLE = [
-  { elementType: "geometry", stylers: [{ color: "#E7E9ED" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#1F2937" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#FFFFFF" }] },
-
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#D1E2EA" }] },
-
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#BFC7D2" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#FFFFFF" }] },
-  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#334155" }] },
+  { elementType: 'geometry', stylers: [{ color: '#E7E9ED' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#1F2937' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#D1E2EA' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#BFC7D2' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] },
 ];
 
+/* =========================
+   FAB RADIAL (sin etiquetas)
+   ========================= */
+const FabRadial = ({
+  actions,
+}: {
+  actions: Array<{ key: string; icon: string; onPress: () => void }>;
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  const toggle = () => {
+    setOpen(o => !o);
+    Animated.spring(anim, {
+      toValue: open ? 0 : 1,
+      useNativeDriver: true,
+      friction: 6,
+      tension: 60,
+    }).start();
+  };
+
+  // Distancia (cerca) y separación angular entre mini-burbujas
+  const R = 56;          // distancia desde la burbuja principal (ajusta 52–60)
+  const CENTER = -100;   // -90=arriba, -180=izquierda (mueve el abanico sin labels)
+  const SPREAD = 100;    // apertura total: más grande = más separadas entre sí
+
+  const angles =
+    actions.length === 1
+      ? [CENTER]
+      : actions.map((_, i) => CENTER - SPREAD / 1 + (SPREAD / (actions.length - 1.5)) * i);
+
+  return (
+    <View pointerEvents="box-none" style={styles.fabArea}>
+      {open && <Pressable style={StyleSheet.absoluteFill} onPress={toggle} />}
+
+      {actions.map((a, i) => {
+        const theta = (angles[i] * Math.PI) / 180;
+        const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.cos(theta)] });
+        const ty = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.sin(theta)] });
+        const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
+
+        return (
+          <Animated.View
+            key={a.key}
+            style={[
+              styles.fabItem,
+              { transform: [{ translateX: tx }, { translateY: ty }, { scale }], opacity: anim },
+            ]}
+          >
+            <Pressable
+              style={styles.smallFab}
+              onPress={() => {
+                toggle();
+                a.onPress();
+              }}
+            >
+              <IconMI name={a.icon as any} size={20} color="#fff" />
+            </Pressable>
+          </Animated.View>
+        );
+      })}
+
+      <Pressable style={styles.fabMain} onPress={toggle}>
+        <Animated.View
+          style={{
+            transform: [{ rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }],
+          }}
+        >
+          <IconMI name="add" size={28} color="#fff" />
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+};
 
 const WelcomeScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [region, setRegion] = useState<Region | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
   const { markers } = useContext(MarkersContext);
-
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-
-  // FAB (bolita de opciones)
-  const [fabOpen, setFabOpen] = useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -72,9 +139,12 @@ const WelcomeScreen: React.FC = () => {
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
             PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
           ]);
-
-          const fine = granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
-          const coarse = granted[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
+          const fine =
+            granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+          const coarse =
+            granted[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
+            PermissionsAndroid.RESULTS.GRANTED;
           if (!fine && !coarse) {
             console.warn('Permisos de ubicación no concedidos');
             setLoading(false);
@@ -101,7 +171,7 @@ const WelcomeScreen: React.FC = () => {
 
         const watchId = Geolocation.watchPosition(
           ({ coords }) => {
-            setRegion((prev) =>
+            setRegion(prev =>
               prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : null
             );
           },
@@ -119,18 +189,16 @@ const WelcomeScreen: React.FC = () => {
     requestLocationPermission();
   }, []);
 
-  // Tamaño de la imagen del reporte seleccionado
   useEffect(() => {
     if (selected?.photoUri) {
       Image.getSize(
         selected.photoUri,
         (width, height) => {
-          const screenWidth = SCREEN_W - 32;
-          const scaleFactor = width / screenWidth;
-          const imageHeight = height / scaleFactor;
-          setImageSize({ width: screenWidth, height: imageHeight });
+          const w = SCREEN_W - 32;
+          const h = (height / width) * w;
+          setImageSize({ width: w, height: h });
         },
-        (error) => console.warn('No se pudo obtener el tamaño de la imagen:', error)
+        () => {}
       );
     }
   }, [selected]);
@@ -138,7 +206,7 @@ const WelcomeScreen: React.FC = () => {
   const handleRecenter = () => {
     Geolocation.getCurrentPosition(
       ({ coords }) => {
-        setRegion((prev) =>
+        setRegion(prev =>
           prev
             ? { ...prev, latitude: coords.latitude, longitude: coords.longitude }
             : {
@@ -149,24 +217,10 @@ const WelcomeScreen: React.FC = () => {
               }
         );
       },
-      (error) => console.warn('No se pudo recentrar:', error),
+      () => {},
       { enableHighAccuracy: true, timeout: 12000 }
     );
   };
-
-  // FAB open/close
-  const toggleFab = () => {
-    setFabOpen((s) => !s);
-    Animated.timing(anim, {
-      toValue: fabOpen ? 0 : 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  // Acciones del FAB (ajusta los nombres de rutas si difieren)
-  const goReportar = () => navigation.navigate('Tabs', { screen: 'Report' });   // o 'Reportar'
-  const goReportes = () => navigation.navigate('Tabs', { screen: 'Reports' });  // o 'Reportes'
 
   if (!region || loading) {
     return (
@@ -183,8 +237,9 @@ const WelcomeScreen: React.FC = () => {
         style={styles.map}
         region={region}
         customMapStyle={MAP_STYLE}
+        mapPadding={{ top: 8, right: 8, bottom: 24, left: 8 }}
       >
-        {/* Ubicación actual */}
+        {/* Mi ubicación */}
         {region && (
           <Marker coordinate={region} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.meOuter}>
@@ -193,8 +248,8 @@ const WelcomeScreen: React.FC = () => {
           </Marker>
         )}
 
-        {/* Reportes */}
-        {markers.map((m) => (
+        {/* Marcadores del contexto */}
+        {markers.map(m => (
           <Marker
             key={m.id}
             coordinate={{ latitude: m.latitude, longitude: m.longitude }}
@@ -209,93 +264,21 @@ const WelcomeScreen: React.FC = () => {
         ))}
       </MapView>
 
-      {/* Header flotante: solo perfil (quitamos el menú inferior) */}
+      {/* Perfil arriba-derecha */}
       <View style={styles.headerOverlay}>
         <ProfileCircle />
       </View>
 
-      {/* FAB de opciones (bolita) */}
-      <View pointerEvents="box-none" style={styles.fabArea}>
-        {/* Fondo para cerrar al tocar fuera cuando está abierto */}
-        {fabOpen && (
-          <Pressable style={StyleSheet.absoluteFill} onPress={toggleFab} />
-        )}
+      {/* Menú radial (burbuja) */}
+      <FabRadial
+        actions={[
+          { key: 'center',  icon: 'my-location',      onPress: handleRecenter },
+          { key: 'report',  icon: 'add-location-alt', onPress: () => navigation.navigate('Report') },
+          { key: 'reports', icon: 'list-alt',         onPress: () => navigation.navigate('Reports') },
+        ]}
+      />
 
-        {/* Botoncitos (animados) */}
-        <Animated.View
-          style={[
-            styles.fabItem,
-            {
-              transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -70] }) },
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
-              ],
-              opacity: anim,
-            },
-          ]}
-        >
-          <Pressable style={styles.smallFab} onPress={handleRecenter}>
-            <IconMI name="my-location" size={20} color="#fff" />
-          </Pressable>
-          <Text style={styles.fabLabel}>Centrar</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.fabItem,
-            {
-              transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -140] }) },
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
-              ],
-              opacity: anim,
-            },
-          ]}
-        >
-          <Pressable style={styles.smallFab} onPress={goReportar}>
-            <IconMI name="add-location-alt" size={20} color="#fff" />
-          </Pressable>
-          <Text style={styles.fabLabel}>Reportar</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.fabItem,
-            {
-              transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -210] }) },
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
-              ],
-              opacity: anim,
-            },
-          ]}
-        >
-          <Pressable style={styles.smallFab} onPress={goReportes}>
-            <IconMI name="list-alt" size={20} color="#fff" />
-          </Pressable>
-          <Text style={styles.fabLabel}>Reportes</Text>
-        </Animated.View>
-
-        {/* Botón principal (bolita) */}
-        <Pressable style={styles.fabMain} onPress={toggleFab}>
-          <Animated.View
-            style={{
-              transform: [
-                {
-                  rotate: anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '45deg'],
-                  }),
-                },
-              ],
-            }}
-          >
-            <IconMI name="add" size={28} color="#fff" />
-          </Animated.View>
-        </Pressable>
-      </View>
-
-      {/* Panel detalle del reporte */}
+      {/* Panel detalle */}
       {selected && (
         <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_HEIGHT}>
           <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
@@ -327,20 +310,15 @@ const WelcomeScreen: React.FC = () => {
 
 export default WelcomeScreen;
 
+/* =========================
+   Styles
+   ========================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: UI.bg,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: UI.bg,
-  },
+  container: { flex: 1, backgroundColor: UI.bg },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: UI.bg },
   map: { flex: 1 },
 
-  /** Dot de usuario */
+  /** Punto de usuario */
   meOuter: {
     width: 20,
     height: 20,
@@ -351,12 +329,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  meInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: UI.primary,
-  },
+  meInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: UI.primary },
 
   /** Pin de reporte */
   pinWrap: { alignItems: 'center' },
@@ -373,29 +346,28 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   pinStem: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 8,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
     marginTop: -1,
   },
 
-  /** Header (solo perfil) */
-  headerOverlay: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-  },
+  /** Perfil */
+  headerOverlay: { position: 'absolute', top: 16, right: 16 },
 
-  /** Zona del FAB */
-  fabArea: {
-    position: 'absolute',
-    right: 16,
-    bottom: 24,
-  },
+  /** FAB y radial */
+  fabArea: { position: 'absolute', right: 12, bottom: 150 },
   fabMain: {
-    width: 56, height: 56, borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 28,
     backgroundColor: UI.primary,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: UI.primary,
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -403,41 +375,19 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   smallFab: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: UI.primary,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
-  },
-  fabItem: {
-    position: 'absolute',
-    right: 6, // pequeño offset para alinear con el main
-    bottom: 60, // base desde donde se animan
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  fabLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    color: UI.muted,
-    backgroundColor: UI.card,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: UI.border,
-  },
+  // origen pegado a la principal
+  fabItem: { position: 'absolute', right: 20, bottom: 52, alignItems: 'center' },
 
-  /** Panel detalle */
-  handleBar: {
-    width: 44, height: 4, borderRadius: 2,
-    backgroundColor: UI.border, alignSelf: 'center', marginBottom: 8,
-  },
-  panelTitle: {
-    fontSize: 20, fontWeight: '800', color: UI.text, marginBottom: 6,
-  },
-  panelDesc: {
-    fontSize: 16, color: '#1f2937', marginBottom: 6,
-  },
-  panelTime: {
-    fontSize: 12, color: UI.muted,
-  },
+  /** Panel */
+  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: UI.border, alignSelf: 'center', marginBottom: 8 },
+  panelTitle: { fontSize: 20, fontWeight: '800', color: UI.text, marginBottom: 6 },
+  panelDesc: { fontSize: 16, color: '#1f2937', marginBottom: 6 },
+  panelTime: { fontSize: 12, color: UI.muted },
 });

@@ -8,9 +8,7 @@ import RootNavigator      from './presentation/navigator/RootNavigator';
 
 const CIUDAMOS: React.FC = () => (
   <MarkersProvider>
-    <NavigationContainer>
       <RootNavigator />
-    </NavigationContainer>
     {/* Este Toast se monta “por encima” de todo */}
     <Toast />
   </MarkersProvider>
