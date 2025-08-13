@@ -1,3 +1,13 @@
+ext {
+  buildToolsVersion = "35.0.0"
+  minSdkVersion     = 24
+  compileSdkVersion = 35
+  targetSdkVersion  = 35
+  // (opcional) ndkVersion si quieres fijarlo:
+  // ndkVersion        = "27.0.12077973"
+}
+
+
 buildscript {
   repositories {
     google()
@@ -8,6 +18,17 @@ buildscript {
     classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
     // 👇 Esto permite que "apply plugin: com.facebook.react" funcione en libs legacy
     classpath("com.facebook.react:react-native-gradle-plugin")
+  }
+}
+// Alinea play-services-location en todo el árbol
+subprojects {
+  configurations.all {
+    resolutionStrategy.eachDependency { details ->
+      if (details.requested.group == "com.google.android.gms" &&
+          details.requested.name == "play-services-location") {
+        details.useVersion "21.3.0"
+      }
+    }
   }
 }
 
