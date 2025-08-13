@@ -1,9 +1,39 @@
-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
-plugins { id("com.facebook.react.settings") }
-extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
-rootProject.name = 'Ciudamos'
-include ':app'
-includeBuild('../node_modules/@react-native/gradle-plugin')
-include ':@react-native-community_geolocation'
-project(':@react-native-community_geolocation').projectDir = new File(rootProject.projectDir, '../node_modules/@react-native-community/geolocation/android')
+pluginManagement {
+  repositories {
+    gradlePluginPortal()
+    google()
+    mavenCentral()
+  }
+  // Para resolver los plugins de RN (com.facebook.react.settings)
+  includeBuild("../node_modules/@react-native/gradle-plugin")
+}
 
+plugins {
+  id("com.facebook.react.settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  ex.autolinkLibrariesFromCommand()
+}
+
+dependencyResolutionManagement {
+  // Evita choque por repos agregados por el plugin (solo warning)
+  repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+  repositories {
+    google()
+    mavenCentral()
+    maven { url("$rootDir/../node_modules/react-native/android") }
+    maven { url("$rootDir/../node_modules/jsc-android/dist") }
+  }
+}
+
+rootProject.name = "Ciudamos"
+include(":app")
+
+// 👇 ESTE includeBuild es el correcto para la sustitución de dependencia del classpath
+includeBuild("../node_modules/@react-native/gradle-plugin") {
+  dependencySubstitution {
+    substitute(module("com.facebook.react:react-native-gradle-plugin"))
+      .using(project(":"))
+  }
+}

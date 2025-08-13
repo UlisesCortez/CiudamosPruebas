@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import Geolocation from '@react-native-community/geolocation';
+import Geolocation from 'react-native-geolocation-service';
 import ProfileCircle from '../presentation/components/ui/ProfileCircle';
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 import ButtonSheet from '../presentation/components/ui/ButtonSheet';

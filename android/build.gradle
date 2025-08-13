@@ -1,28 +1,16 @@
 buildscript {
-    ext {
-        buildToolsVersion = "35.0.0"
-        minSdkVersion = 24
-        compileSdkVersion = 35
-        targetSdkVersion = 35
-        ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.0.21"
-    }
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle")
-        classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
-    }
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath("com.android.tools.build:gradle:8.8.2")
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
+    // 👇 Esto permite que "apply plugin: com.facebook.react" funcione en libs legacy
+    classpath("com.facebook.react:react-native-gradle-plugin")
+  }
 }
 
-apply plugin: "com.facebook.react.rootproject"
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+tasks.register("clean", Delete) {
+  delete rootProject.buildDir
 }

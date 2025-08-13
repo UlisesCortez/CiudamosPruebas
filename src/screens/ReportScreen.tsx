@@ -10,7 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import Geolocation from '@react-native-community/geolocation';
+import Geolocation from 'react-native-geolocation-service';
 import { launchCamera, CameraOptions } from 'react-native-image-picker';
 import MapView, { Marker } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
