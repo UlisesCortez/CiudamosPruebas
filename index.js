@@ -1,12 +1,18 @@
-// index.js
-
+// index.js (o index.tsx)
 import 'react-native-gesture-handler';
+import 'react-native-reanimated';
+
 import { AppRegistry } from 'react-native';
-import { enableScreens } from 'react-native-screens';
-import App from './src/CIUDAMOS';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import App from './src/CIUDAMOS.tsx';          // ajusta la ruta si tu App está en otro lado
 import { name as appName } from './app.json';
 
-// Activa las pantallas nativas para animaciones 60 fps
-enableScreens();
+function Root() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <App />
+    </GestureHandlerRootView>
+  );
+}
 
-AppRegistry.registerComponent(appName, () => App);
+AppRegistry.registerComponent(appName, () => Root);

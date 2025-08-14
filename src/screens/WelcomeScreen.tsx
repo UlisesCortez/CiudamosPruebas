@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,13 +14,20 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
-import ProfileCircle from '../presentation/components/ui/ProfileCircle';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 import ButtonSheet from '../presentation/components/ui/ButtonSheet';
+import RecentReportsSheet from '../presentation/components/ui/RecentReportsSheet';
+import TopBar, { APPBAR_HEIGHT } from '../presentation/components/ui/TopBar';
+
 import IconMI from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const PANEL_HEIGHT = 800;
 
 const UI = {
   bg: '#F4F7FC',
@@ -31,10 +38,6 @@ const UI = {
   text: '#0D1313',
 };
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const PANEL_HEIGHT = 800;
-
-/** Estilo de mapa claro y legible */
 const MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#E7E9ED' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -49,15 +52,17 @@ const MAP_STYLE = [
 ];
 
 /* =========================
-   FAB RADIAL (sin etiquetas)
+   FAB RADIAL (compacto)
    ========================= */
 const FabRadial = ({
   actions,
+  tint = UI.primary,
 }: {
   actions: Array<{ key: string; icon: string; onPress: () => void }>;
+  tint?: string;
 }) => {
   const [open, setOpen] = React.useState(false);
-  const anim = React.useRef(new Animated.Value(0)).current;
+  const anim = useRef(new Animated.Value(0)).current;
 
   const toggle = () => {
     setOpen(o => !o);
@@ -69,10 +74,10 @@ const FabRadial = ({
     }).start();
   };
 
-  // Distancia (cerca) y separación angular entre mini-burbujas
-  const R = 56;          // distancia desde la burbuja principal (ajusta 52–60)
-  const CENTER = -100;   // -90=arriba, -180=izquierda (mueve el abanico sin labels)
-  const SPREAD = 100;    // apertura total: más grande = más separadas entre sí
+  // abanico hacia arriba-izquierda
+  const R = 56;
+  const CENTER = -100;
+  const SPREAD = 100;
 
   const angles =
     actions.length === 1
@@ -82,13 +87,11 @@ const FabRadial = ({
   return (
     <View pointerEvents="box-none" style={styles.fabArea}>
       {open && <Pressable style={StyleSheet.absoluteFill} onPress={toggle} />}
-
       {actions.map((a, i) => {
         const theta = (angles[i] * Math.PI) / 180;
         const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.cos(theta)] });
         const ty = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.sin(theta)] });
         const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
-
         return (
           <Animated.View
             key={a.key}
@@ -98,7 +101,7 @@ const FabRadial = ({
             ]}
           >
             <Pressable
-              style={styles.smallFab}
+              style={[styles.smallFab, { backgroundColor: tint }]}
               onPress={() => {
                 toggle();
                 a.onPress();
@@ -109,8 +112,7 @@ const FabRadial = ({
           </Animated.View>
         );
       })}
-
-      <Pressable style={styles.fabMain} onPress={toggle}>
+      <Pressable style={[styles.fabMain, { backgroundColor: tint }]} onPress={toggle}>
         <Animated.View
           style={{
             transform: [{ rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }],
@@ -125,6 +127,8 @@ const FabRadial = ({
 
 const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
+
   const [region, setRegion] = useState<Region | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
@@ -232,12 +236,27 @@ const WelcomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* TopBar compacto */}
+      <View style={styles.topOverlay}>
+        <TopBar
+          title="Ciudamos"
+          onProfilePress={() => navigation.navigate('Profile')}
+          onSearchPress={() => navigation.navigate('Reports')}
+          onBellPress={() => navigation.navigate('Reports')}
+        />
+      </View>
+
       <MapView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={region}
         customMapStyle={MAP_STYLE}
-        mapPadding={{ top: 8, right: 8, bottom: 24, left: 8 }}
+        mapPadding={{
+          top: insets.top + APPBAR_HEIGHT + 6,    // espacio exacto para el app bar
+          right: 8,
+          bottom: 200,                             // deja ver la sheet levantada
+          left: 8,
+        }}
       >
         {/* Mi ubicación */}
         {region && (
@@ -248,7 +267,7 @@ const WelcomeScreen: React.FC = () => {
           </Marker>
         )}
 
-        {/* Marcadores del contexto */}
+        {/* Marcadores */}
         {markers.map(m => (
           <Marker
             key={m.id}
@@ -264,13 +283,9 @@ const WelcomeScreen: React.FC = () => {
         ))}
       </MapView>
 
-      {/* Perfil arriba-derecha */}
-      <View style={styles.headerOverlay}>
-        <ProfileCircle />
-      </View>
-
-      {/* Menú radial (burbuja) */}
+      {/* FAB radial */}
       <FabRadial
+        tint={UI.primary}
         actions={[
           { key: 'center',  icon: 'my-location',      onPress: handleRecenter },
           { key: 'report',  icon: 'add-location-alt', onPress: () => navigation.navigate('Report') },
@@ -278,7 +293,13 @@ const WelcomeScreen: React.FC = () => {
         ]}
       />
 
-      {/* Panel detalle */}
+      {/* Sheet de reportes recientes (colapsada más alta) */}
+      <RecentReportsSheet
+        collapsedPx={170}
+        onPressItem={(m) => setSelected(m)}
+      />
+
+      {/* Panel detalle de un reporte */}
       {selected && (
         <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_HEIGHT}>
           <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
@@ -318,6 +339,8 @@ const styles = StyleSheet.create({
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: UI.bg },
   map: { flex: 1 },
 
+  topOverlay: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 10 },
+
   /** Punto de usuario */
   meOuter: {
     width: 20,
@@ -356,16 +379,12 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
 
-  /** Perfil */
-  headerOverlay: { position: 'absolute', top: 16, right: 16 },
-
   /** FAB y radial */
-  fabArea: { position: 'absolute', right: 12, bottom: 150 },
+  fabArea: { position: 'absolute', right: 12, bottom: 295 }, // evita chocar con la sheet
   fabMain: {
     width: 60,
     height: 60,
     borderRadius: 28,
-    backgroundColor: UI.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: UI.primary,
@@ -378,14 +397,12 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: UI.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // origen pegado a la principal
   fabItem: { position: 'absolute', right: 20, bottom: 52, alignItems: 'center' },
 
-  /** Panel */
+  /** Panel detalle */
   handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: UI.border, alignSelf: 'center', marginBottom: 8 },
   panelTitle: { fontSize: 20, fontWeight: '800', color: UI.text, marginBottom: 6 },
   panelDesc: { fontSize: 16, color: '#1f2937', marginBottom: 6 },
