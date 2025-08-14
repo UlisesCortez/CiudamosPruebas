@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import MainTabNavigator from './MainTabNavigator';
+import type { Marker } from '../../context/MarkersContext';
 
 import LoginScreen from '../../screens/LoginScreen';
 import RegisterScreen from '../../screens/RegisterScreen';
@@ -21,6 +22,8 @@ export type RootStackParamList = {
   Reportar: { imageUri?: string } | undefined; // 👈 agrega esto
   Rewards: undefined;
   Profile: undefined;
+  DetalleReporte: { marker: Marker }; // ⬅️ NUEVO
+
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,7 +47,6 @@ const RootNavigator: React.FC = () => (
     <Stack.Screen name="Profile" component={ProfileScreen} />
     <Stack.Screen name="Reportar" component={ReportScreen} />
     <Stack.Screen name="Rewards" component={RewardsScreen} />
-
   </Stack.Navigator>
 );
 

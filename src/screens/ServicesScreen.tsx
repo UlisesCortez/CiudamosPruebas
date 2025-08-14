@@ -19,6 +19,9 @@ const SERVICES: Service[] = [
   { id: 'bomberos', name: 'Bomberos', phone: '1234567891', icon: 'local-fire-department' },
   { id: 'cruz', name: 'Cruz Roja', phone: '1234567892', icon: 'medical-services' },
   { id: 'municipio', name: 'Atención ciudadana', phone: '1234567893', icon: 'support-agent' },
+  { id: 'seguridad_publica', name: 'Seguridad Pública', phone: '6311625050', icon: 'support-agent' },
+  { id: 'imagen_urbana', name: 'Imagen Urbana', phone: '6311625065', icon: 'support-agent' },
+
 ];
 
 const ServicesScreen: React.FC = () => {

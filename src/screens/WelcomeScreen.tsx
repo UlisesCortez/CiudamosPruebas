@@ -11,6 +11,7 @@ import {
   Dimensions,
   Pressable,
   Animated,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
@@ -26,30 +27,22 @@ import { useTheme } from '../theme/theme';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 
 const UI = { primary: '#0AC5C5' };
-const { width: SCREEN_W } = Dimensions.get('window');
-const PANEL_HEIGHT = 800;
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Sube la burbuja de forma estática (sin animaciones con la sheet)
-const FAB_EXTRA_BOTTOM = 96; // súbelo más/menos si lo quieres ajustar
+// ===== Ajustes rápidos =====
+const FAB_EXTRA_BOTTOM = 96;                 // Sube/baja la burbuja (FAB)
+const PANEL_INITIAL_FRACTION = 0.65;         // Alto inicial del panel (65% de pantalla)
+const PANEL_INITIAL = Math.round(SCREEN_H * PANEL_INITIAL_FRACTION);
 
-const MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#E7E9ED' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#1F2937' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#D1E2EA' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#BFC7D2' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] },
-];
+// Estilo por defecto (sin personalización)
+const MAP_STYLE: any[] = [];
+
 
 /** ========== FAB RADIAL ========== */
 const FabRadial: React.FC<{
   actions: Array<{ key: string; icon: string; onPress: () => void }>;
   tabBarSpace: number;
-  extraBottom?: number; // ⬅️ nuevo: elevar sin animaciones
+  extraBottom?: number;
 }> = ({ actions, tabBarSpace, extraBottom = 0 }) => {
   const [open, setOpen] = React.useState(false);
   const anim = React.useRef(new Animated.Value(0)).current;
@@ -76,10 +69,7 @@ const FabRadial: React.FC<{
   return (
     <View
       pointerEvents="box-none"
-      style={[
-        styles.fabArea,
-        { bottom: insets.bottom + tabBarSpace + 24 + extraBottom },
-      ]}
+      style={[styles.fabArea, { bottom: insets.bottom + tabBarSpace + 24 + extraBottom }]}
     >
       {open && <Pressable style={StyleSheet.absoluteFill} onPress={toggle} />}
 
@@ -167,7 +157,6 @@ const WelcomeScreen: React.FC = () => {
       Toast.show({ type: 'error', text1: 'No se obtuvo la imagen' });
       return;
     }
-    // Ajusta el nombre de la ruta si tu stack usa 'Report' o 'Reportar'
     navigation.getParent()?.navigate('Reportar' as never, { imageUri: asset.uri } as never);
   };
 
@@ -300,16 +289,21 @@ const WelcomeScreen: React.FC = () => {
     );
   };
 
+  const openInMaps = (m: ReportMarker) => {
+    const url = `https://www.google.com/maps/search/?api=1&query=${m.latitude},${m.longitude}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
   if (!region || loading) {
     return (
-      <View style={[styles.loaderContainer, { backgroundColor: colors.bg }]}>
+      <View style={[styles.loaderContainer, { backgroundColor: colors?.bg ?? '#F4F7FC' }]}>
         <ActivityIndicator size="large" color={UI.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <View style={[styles.container, { backgroundColor: colors?.bg ?? '#F4F7FC' }]}>
       <MapView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
@@ -356,31 +350,78 @@ const WelcomeScreen: React.FC = () => {
         onPressItem={(m) => setSelected(m)}
         bottomInset={insets.bottom + (tabBarHeight ?? 0) + 12}
         startIndex={0}
-        // sin onIndexChange ni animaciones
       />
 
       {selected && (
-        <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_HEIGHT}>
-          <View style={{ paddingBottom: 24 }}>
+        <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_INITIAL}>
+          <View style={{ padding: 16, paddingBottom: 24 }}>
             <View style={styles.handleBar} />
-            <Text style={styles.panelTitle}>{selected.title}</Text>
-            <Text style={styles.panelDesc}>{selected.description}</Text>
-            <Text style={styles.panelTime}>{new Date(selected.timestamp).toLocaleString()}</Text>
 
-            {selected.photoUri && (
+            {/* Header */}
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>{selected.title || 'Incidente'}</Text>
+              <View style={styles.chip}>
+                <View style={[styles.dot, { backgroundColor: selected.color || UI.primary }]} />
+                <Text style={styles.chipText}>Activo</Text>
+              </View>
+            </View>
+
+            {/* Meta */}
+            <View style={styles.metaRow}>
+              <View style={styles.metaItem}>
+                <MI name="schedule" size={18} color="#6B7280" />
+                <Text style={styles.metaText}>
+                  {new Date(selected.timestamp).toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.metaItem}>
+                <MI name="place" size={18} color="#6B7280" />
+                <Text style={styles.metaText}>
+                  {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Descripción (arriba de la imagen) */}
+            {!!selected.description && (
+              <>
+                <Text style={styles.sectionLabel}>Descripción</Text>
+                <Text style={styles.panelDesc}>{selected.description}</Text>
+              </>
+            )}
+
+            {/* Imagen */}
+            {selected.photoUri ? (
               <Image
                 source={{ uri: selected.photoUri }}
                 style={{
-                  width: imageSize.width,
-                  height: imageSize.height,
+                  width: '100%',
+                  height: 220,
                   borderRadius: 16,
                   marginTop: 12,
-                  alignSelf: 'center',
                   backgroundColor: '#eaeaea',
                 }}
-                resizeMode="contain"
+                resizeMode="cover"
               />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <MI name="image" size={28} color="#9AA3AF" />
+                <Text style={styles.placeholderText}>Sin imagen</Text>
+              </View>
             )}
+
+            {/* CTAs */}
+            <View style={styles.ctaRow}>
+              <Pressable style={[styles.ctaButton, styles.ctaOutline]} onPress={() => openInMaps(selected)}>
+                <MI name="navigation" size={18} color="#0D1313" />
+                <Text style={[styles.ctaText, styles.ctaOutlineText]}>Ver ruta</Text>
+              </Pressable>
+
+              <Pressable style={styles.ctaButton} onPress={() => setSelected(null)}>
+                <MI name="close" size={18} color="#fff" />
+                <Text style={styles.ctaText}>Cerrar</Text>
+              </Pressable>
+            </View>
           </View>
         </ButtonSheet>
       )}
@@ -426,8 +467,63 @@ const styles = StyleSheet.create({
   },
   fabItem: { position: 'absolute', right: 20, bottom: 52, alignItems: 'center' },
 
-  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: '#D7DDE5', alignSelf: 'center', marginBottom: 8 },
-  panelTitle: { fontSize: 20, fontWeight: '800', color: '#0D1313', marginBottom: 6 },
-  panelDesc: { fontSize: 16, color: '#1f2937', marginBottom: 6 },
-  panelTime: { fontSize: 12, color: '#6B7280' },
+  handleBar: {
+    width: 44, height: 4, borderRadius: 2, backgroundColor: '#D7DDE5',
+    alignSelf: 'center', marginBottom: 8,
+  },
+  panelTitle: { fontSize: 20, fontWeight: '800', color: '#0D1313' },
+  panelDesc: { fontSize: 16, color: '#1f2937', marginTop: 6 },
+
+  // Detalle del reporte
+  panelHeader: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  chipText: { color: '#0D1313', fontWeight: '700', fontSize: 12 },
+
+  metaRow: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { color: '#6B7280', fontSize: 12 },
+
+  imagePlaceholder: {
+    height: 200,
+    borderRadius: 16,
+    backgroundColor: '#EDF2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  placeholderText: { marginTop: 6, color: '#9AA3AF', fontWeight: '700' },
+
+  sectionLabel: { marginTop: 14, fontWeight: '800', color: '#0D1313' },
+
+  ctaRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  ctaButton: {
+    flex: 1,
+    backgroundColor: UI.primary,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  ctaText: { color: '#fff', fontWeight: '900' },
+  ctaOutline: {
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E7E9ED',
+  },
+  ctaOutlineText: { color: '#0D1313' },
 });

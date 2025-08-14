@@ -1,7 +1,9 @@
+// src/presentation/navigator/MainTabNavigator.tsx
 import React from 'react';
 import { Pressable, Text, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import MI from 'react-native-vector-icons/MaterialIcons';
+import MCI from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import WelcomeScreen from '../../screens/WelcomeScreen';
 import CommunityScreen from '../../screens/CommunityScreen';
@@ -14,6 +16,9 @@ export type MainTabsParamList = {
 };
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
+
+const BUBBLE_BLUE = '#0AC5C5';
+const LABEL_BLACK = '#0D1313';
 
 const styles = StyleSheet.create({
   pill: {
@@ -64,11 +69,24 @@ const MainTabNavigator: React.FC = () => {
         headerShadowVisible: false,
         headerTitleAlign: 'left',
         tabBarHideOnKeyboard: true,
-        tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 8 },
+
+        // Barra blanca
+        tabBarStyle: {
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: '#E7E9ED',
+        },
+
+        // Labels negras (activo e inactivo)
+        tabBarActiveTintColor: LABEL_BLACK,
+        tabBarInactiveTintColor: LABEL_BLACK,
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
       }}
     >
-      {/* MAPA — header transparente + Recompensas junto al perfil */}
+      {/* MAPA */}
       <Tab.Screen
         name="Mapa"
         component={WelcomeScreen}
@@ -91,7 +109,6 @@ const MainTabNavigator: React.FC = () => {
           ),
           headerRight: () => (
             <View style={styles.rightBtns}>
-              {/* Recompensas */}
               <Pressable
                 onPress={() => navigation.getParent()?.navigate('Rewards' as never)}
                 style={({ pressed }) => [styles.rightBtn, pressed && { opacity: 0.85 }]}
@@ -99,10 +116,8 @@ const MainTabNavigator: React.FC = () => {
               >
                 <MI name="emoji-events" size={20} color="#0D1313" />
               </Pressable>
-
-              {/* Perfil */}
               <Pressable
-                onPress={() => navigation.getParent()?.navigate('Perfil' as never)}
+                onPress={() => navigation.getParent()?.navigate('Profile' as never)}
                 style={({ pressed }) => [styles.rightBtn, pressed && { opacity: 0.85 }]}
                 hitSlop={8}
               >
@@ -110,7 +125,9 @@ const MainTabNavigator: React.FC = () => {
               </Pressable>
             </View>
           ),
-          tabBarIcon: ({ size }) => <MI name="map" size={size} />,
+          // Activo = filled | Inactivo = outline (azul)
+          tabBarIcon: ({ size, focused }) =>
+            <MCI name={focused ? 'map' : 'map-outline'} size={size} color={BUBBLE_BLUE} />,
         })}
       />
 
@@ -120,7 +137,8 @@ const MainTabNavigator: React.FC = () => {
         component={CommunityScreen}
         options={{
           headerTitle: 'Comunidad',
-          tabBarIcon: ({ size }) => <MI name="forum" size={size} />,
+          tabBarIcon: ({ size, focused }) =>
+            <MCI name={focused ? 'forum' : 'forum-outline'} size={size} color={BUBBLE_BLUE} />,
         }}
       />
 
@@ -130,7 +148,8 @@ const MainTabNavigator: React.FC = () => {
         component={ServicesScreen}
         options={{
           headerTitle: 'Servicios y emergencias',
-          tabBarIcon: ({ size }) => <MI name="medical-services" size={size} />,
+          tabBarIcon: ({ size, focused }) =>
+            <MCI name={focused ? 'medical-bag' : 'medical-bag-outline'} size={size} color={BUBBLE_BLUE} />,
         }}
       />
     </Tab.Navigator>
