@@ -23,8 +23,8 @@ export default function MenuScreen() {
   const options: MenuOption[] = [
     { label: 'Mi Perfil', route: 'Profile' },
     { label: 'Recompensas', route: 'Rewards' },
-    { label: 'Configuración', route: 'Settings' },
-    { label: 'Ayuda', route: 'Help' },
+    { label: 'Configuración',  action: () => Alert.alert('Próximamente') },
+    { label: 'Ayuda',          action: () => Alert.alert('Próximamente') },
     {
       label: 'Cerrar Sesión',
       action: () => Alert.alert('Sesión', 'Cerrando sesión...'),

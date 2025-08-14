@@ -1,7 +1,6 @@
+// src/screens/ProfileScreen.tsx
 import React, { useState } from 'react';
-import {
-  SafeAreaView,
-} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -17,7 +16,6 @@ import TopBar from '../presentation/components/ui/TopBar';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
-
 
 const UI = {
   bg: '#F4F7FC',
@@ -52,8 +50,9 @@ const ProfileScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }}>
-      <TopBar title="Mi perfil" showBack onBackPress={() => navigation.goBack()} />
+    // 👇 Solo bottom safe area; el TopBar ya aplica el top, así evitamos doble espacio
+    <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }} edges={['bottom']}>
+      <TopBar title="Mi perfil" showBack={false} onPressProfile={() => {}} />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Card superior */}
@@ -105,12 +104,7 @@ const ProfileScreen: React.FC = () => {
         <Section title="Cuenta">
           <RowItem icon="security" label="Privacidad" onPress={() => Alert.alert('Privacidad')} />
           <RowItem icon="help-outline" label="Ayuda" onPress={() => Alert.alert('Ayuda')} />
-          <RowItem
-            icon="logout"
-            label="Cerrar sesión"
-            danger
-            onPress={handleSignOut}
-          />
+          <RowItem icon="logout" label="Cerrar sesión" danger onPress={handleSignOut} />
         </Section>
       </ScrollView>
     </SafeAreaView>
@@ -165,17 +159,12 @@ function RowItem({
   danger?: boolean;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : 1 }]}
-    >
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : 1 }]}>
       <View style={styles.rowLeft}>
         <View style={[styles.rowIconWrap, { backgroundColor: 'rgba(10,197,197,0.12)' }]}>
           <MI name={icon as any} size={20} color={UI.primary} />
         </View>
-        <Text style={[styles.rowLabel, danger && { color: '#C0332B', fontWeight: '800' }]}>
-          {label}
-        </Text>
+        <Text style={[styles.rowLabel, danger && { color: '#C0332B', fontWeight: '800' }]}>{label}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {!!right && <Text style={styles.rowRightText}>{right}</Text>}

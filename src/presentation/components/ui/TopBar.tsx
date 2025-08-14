@@ -1,3 +1,4 @@
+// src/presentation/components/ui/TopBar.tsx
 import React from 'react';
 import {
   View,
@@ -12,53 +13,92 @@ import MI from 'react-native-vector-icons/MaterialIcons';
 
 export const APPBAR_HEIGHT = 56;
 
-type Props = {
+export type TopBarProps = {
+  /** Si lo pasas, se muestra el título; si no, se muestra la pill de búsqueda */
   title?: string;
+
+  /** Estilo externo del contenedor de la barra */
   style?: StyleProp<ViewStyle>;
-  backgroundColor?: string;  // por defecto blanco sutil
-  textColor?: string;        // por defecto #0D1313
-  accentColor?: string;      // color de acento para pressed state
+  /** Fondo de la app bar (por defecto transparente-sutil) */
+  backgroundColor?: string;
+  /** Color principal de texto/íconos */
+  textColor?: string;
+  /** Color de acento (logo, etc.) */
+  accentColor?: string;
+
+  /** Muestra flecha atrás (si no, muestra el logo) */
   showBack?: boolean;
   onBackPress?: () => void;
-  onSearchPress?: () => void;
-  onBellPress?: () => void;
-  onProfilePress?: () => void;
+
+  /** Texto de la pill de búsqueda (cuando no hay title) */
+  placeholder?: string;
+  /** Tap en la pill de búsqueda */
+  onPressSearch?: () => void;
+
+  /** Tap en el botón de perfil (headerRight) */
+  onPressProfile?: () => void;
+
+  /** Compatibilidad: no usamos micrófono, pero se permite la prop */
+  hideMic?: boolean;
+
+  /** Mostrar/ocultar campana (por si la quieres luego) */
+  hideBell?: boolean;
 };
 
-const TopBar: React.FC<Props> = ({
-  title = 'Ciudamos',
+const TopBar: React.FC<TopBarProps> = ({
+  title, // <- NUEVO: si viene, muestra título
   style,
-  backgroundColor = 'rgba(255,255,255,0.96)',
+  backgroundColor = 'transparent',
   textColor = '#0D1313',
   accentColor = '#0AC5C5',
   showBack = false,
   onBackPress,
-  onSearchPress,
-  onBellPress,
-  onProfilePress,
+
+  placeholder = 'Buscar aquí',
+  onPressSearch,
+
+  onPressProfile,
+  hideMic = true, // no usamos mic
+  hideBell = true,
 }) => {
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: 'transparent' }}>
       <View style={[styles.bar, { backgroundColor }, style]}>
         {/* Izquierda: back o icono de app */}
         {showBack ? (
-          <IconBtn name="arrow-back" onPress={onBackPress} />
+          <IconBtn name="arrow-back" onPress={onBackPress} color={textColor} />
         ) : (
-          <View style={styles.leftLogo}>
+          <View style={[styles.leftLogo, { borderColor: '#E7E9ED' }]}>
             <MI name="explore" size={20} color={accentColor} />
           </View>
         )}
 
-        {/* Título */}
-        <Text numberOfLines={1} style={[styles.title, { color: textColor }]}>
-          {title}
-        </Text>
+        {/* Centro: si hay title, lo mostramos; si no, pill de búsqueda */}
+        {title ? (
+          <Text numberOfLines={1} style={[styles.titleText, { color: textColor }]}>
+            {title}
+          </Text>
+        ) : (
+          <Pressable
+            onPress={onPressSearch}
+            style={({ pressed }) => [
+              styles.searchPill,
+              { borderColor: '#E7E9ED' },
+              pressed && { opacity: 0.9 },
+            ]}
+            hitSlop={8}
+          >
+            <MI name="search" size={20} color="#6B7280" style={{ marginRight: 8 }} />
+            <Text numberOfLines={1} style={styles.searchPlaceholder}>
+              {placeholder}
+            </Text>
+          </Pressable>
+        )}
 
-        {/* Acciones */}
+        {/* Derecha: (opcional) campana y perfil */}
         <View style={styles.actions}>
-          <IconBtn name="search" onPress={onSearchPress} />
-          <IconBtn name="notifications-none" onPress={onBellPress} />
-          <IconBtn name="person" onPress={onProfilePress} />
+          {!hideBell && <IconBtn name="notifications-none" onPress={() => {}} color={textColor} />}
+          <IconBtn name="person" onPress={onPressProfile} color={textColor} />
         </View>
       </View>
     </SafeAreaView>
@@ -71,9 +111,11 @@ export default TopBar;
 function IconBtn({
   name,
   onPress,
+  color = '#0D1313',
 }: {
   name: string;
   onPress?: () => void;
+  color?: string;
 }) {
   return (
     <Pressable
@@ -84,7 +126,7 @@ function IconBtn({
         { opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      <MI name={name as any} size={22} color="#0D1313" />
+      <MI name={name as any} size={22} color={color} />
     </Pressable>
   );
 }
@@ -95,14 +137,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    // sombra/elevación sutil tipo app bar
+    // borde/sombra sutil opcional; al ser transparente apenas se nota
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E7E9ED',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderBottomColor: 'rgba(231, 233, 237, 0.0)',
   },
   leftLogo: {
     height: 32,
@@ -112,19 +149,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E7E9ED',
+    marginRight: 10,
   },
-  title: {
+  titleText: {
     flex: 1,
-    marginLeft: 10,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.2,
   },
+  searchPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    fontSize: 16,
+    color: '#6B7280',
+    includeFontPadding: false,
+  },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginLeft: 10,
   },
   iconBtn: {
     height: 36,
@@ -132,5 +184,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 4,
   },
 });

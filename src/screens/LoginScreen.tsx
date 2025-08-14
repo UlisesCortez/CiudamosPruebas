@@ -35,7 +35,7 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const onIngresar = () => navigation.navigate('Welcome');
+  const onIngresar = () => navigation.navigate('Tabs');
 
   return (
     <KeyboardAvoidingView

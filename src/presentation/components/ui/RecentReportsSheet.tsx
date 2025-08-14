@@ -1,123 +1,161 @@
 // src/presentation/components/ui/RecentReportsSheet.tsx
-import React, { useMemo, useRef, useContext } from 'react';
+import React, { useMemo, useRef, useCallback, useContext } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import MI from 'react-native-vector-icons/MaterialIcons';
+
 import { MarkersContext, Marker as ReportMarker } from '../../../context/MarkersContext';
+// @ts-ignore — tolerante si no existe el tema
 import { useTheme } from '../../../theme/theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const TAB_BAR_HEIGHT = 64;
+type Props = {
+  onPressItem: (m: ReportMarker) => void;
+  /** Altura colapsada inicial de la sheet (px) */
+  collapsedPx?: number;
+  /** Espacio extra inferior (safe area + tab bar) para evitar solaparse */
+  bottomInset?: number;
+  /** Índice inicial (0 / 1 / 2) */
+  startIndex?: 0 | 1 | 2;
 
-const toMs = (t: unknown) => {
-  if (typeof t === 'number') return t;
-  const n = Date.parse(String(t));
-  if (!Number.isNaN(n)) return n;
-  const m = Number(t);
-  return Number.isNaN(m) ? 0 : m;
+  /** Notifica cambios de índice para animar/ocultar FAB, etc. */
+  onIndexChange?: (index: number) => void;
+  /** Permite sobreescribir los puntos de anclaje; por defecto: [collapsed, '50%', '85%'] */
+  snapPoints?: Array<number | string>;
 };
 
-const RecentReportsSheet: React.FC<{
-  onPressItem: (m: ReportMarker) => void;
-  collapsedPx?: number;
-}> = ({ onPressItem, collapsedPx = 150 }) => {         // ⬅️ subimos el default
+const RecentReportsSheet: React.FC<Props> = ({
+  onPressItem,
+  collapsedPx = 96,
+  bottomInset = 0,
+  startIndex = 0,
+  onIndexChange,
+  snapPoints,
+}) => {
+  const bottomSheetRef = useRef<BottomSheet>(null);
   const { markers } = useContext(MarkersContext);
-  const { colors, typography } = useTheme();
-  const sheetRef = useRef<BottomSheet>(null);
-  const insets = useSafeAreaInsets();
 
-  const snapPoints = useMemo(() => [collapsedPx, '50%', '88%'] as const, [collapsedPx]);
-
-  const data = useMemo(
-    () => [...markers].sort((a, b) => toMs(b.timestamp) - toMs(a.timestamp)).slice(0, 50),
-    [markers]
-  );
-
-  const timeAgo = (ms: number) => {
-    const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h`;
-    const d = Math.floor(h / 24);
-    return `${d}d`;
+  // Theme tolerante
+  let theme: any = undefined;
+  try { theme = useTheme?.(); } catch { /* noop */ }
+  const colors = {
+    text: theme?.colors?.text ?? '#111827',
+    muted: theme?.colors?.muted ?? '#6b7280',
+    border: theme?.colors?.border ?? '#e5e7eb',
+    surface: theme?.colors?.surface ?? '#ffffff',
   };
+
+  // Puntos de anclaje (por defecto: colapsado, 50% y 85%)
+  const defaultSnapPoints = useMemo<Array<number | string>>(() => {
+    const min = Math.max(64, collapsedPx);
+    return [min, '50%', '85%'];
+  }, [collapsedPx]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ReportMarker }) => {
+      const cat =
+        (item as any)?.category ??
+        (item as any)?.tipo ??
+        (item as any)?.type ??
+        '—';
+
+      const rawDate =
+        (item as any)?.date ??
+        (item as any)?.fecha ??
+        (item as any)?.createdAt ??
+        (item as any)?.timestamp;
+
+      let whenText = '';
+      if (rawDate) {
+        const d = new Date(rawDate);
+        whenText = Number.isNaN(d.getTime()) ? String(rawDate) : d.toLocaleString();
+      }
+
+      const subtitle = whenText ? `${cat} · ${whenText}` : String(cat);
+
+      return (
+        <Pressable
+          onPress={() => onPressItem(item)}
+          style={[styles.item, { borderColor: colors.border }]}
+        >
+          <View style={styles.itemLeft}>
+            <MI name="place" size={20} />
+          </View>
+
+          <View style={styles.itemBody}>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              {(item as any)?.title ?? 'Reporte'}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.muted }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </View>
+
+          <MI name="chevron-right" size={20} />
+        </Pressable>
+      );
+    },
+    [onPressItem, colors.border, colors.text, colors.muted]
+  );
 
   return (
     <BottomSheet
-      ref={sheetRef}
-      snapPoints={snapPoints as unknown as (string | number)[]}
-      index={1} // ⬅️ arranca en medio
+      ref={bottomSheetRef}
+      index={startIndex}
+      snapPoints={snapPoints ?? defaultSnapPoints}
+      detached
+      style={[
+        styles.sheet,
+        { marginBottom: bottomInset },
+      ]}
+      backgroundStyle={{ backgroundColor: colors.surface }}
+      handleIndicatorStyle={{ backgroundColor: colors.border }}
       enablePanDownToClose={false}
-      bottomInset={insets.bottom + TAB_BAR_HEIGHT + 12} // ⬅️ despega de la tab bar
-      handleIndicatorStyle={{ backgroundColor: colors.border, width: 44, height: 4 }}
-      backgroundStyle={{ backgroundColor: colors.surface, borderRadius: 16 }}
+      // 👇 Muy importante para animar/ocultar el FAB desde Welcome
+      onChange={(idx) => onIndexChange?.(idx)}
     >
-      <View style={styles.header}>
-        <Text style={[typography.h2, { color: colors.text }]}>Reportes recientes</Text>
-        <MI name="history" size={18} color={colors.muted} />
-      </View>
-
       <BottomSheetFlatList
-        data={data}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => {
-              onPressItem(item);
-              sheetRef.current?.snapToIndex(0);
-            }}
-            style={({ pressed }) => [
-              styles.row,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                opacity: pressed ? 0.96 : 1,
-              },
-            ]}
-          >
-            <View style={[styles.dot, { backgroundColor: item.color || colors.primary }]} />
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                {item.title || 'Reporte'}
-              </Text>
-              <Text numberOfLines={2} style={{ fontSize: 12, color: colors.muted }}>
-                {item.description || '—'}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 12, color: colors.muted, marginRight: 4 }}>
-              {timeAgo(toMs(item.timestamp))}
-            </Text>
-            <MI name="chevron-right" size={20} color={colors.muted} />
-          </Pressable>
-        )}
+        data={markers}
+        keyExtractor={(m, i) => String((m as any)?.id ?? (m as any)?.IdReporte ?? i)}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingBottom: 16 }}
       />
     </BottomSheet>
   );
 };
 
-export default RecentReportsSheet;
-
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  sheet: {
+    marginHorizontal: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  row: {
-    marginHorizontal: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 2 },
+  itemLeft: {
+    width: 28,
+    alignItems: 'center',
+  },
+  itemBody: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
 });
+
+export default RecentReportsSheet;

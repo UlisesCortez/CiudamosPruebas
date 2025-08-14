@@ -1,201 +1,188 @@
+// src/screens/ReportScreen.tsx
 import React, { useEffect, useState, useContext } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   Image,
   ScrollView,
   Alert,
   Platform,
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
-import { launchCamera, CameraOptions } from 'react-native-image-picker';
-import MapView, { Marker } from 'react-native-maps';
-import { useNavigation } from '@react-navigation/native';
-import { MarkersContext } from '../context/MarkersContext';
-import ProfileCircle from '../presentation/components/ui/ProfileCircle';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 
-export const ReportScreen: React.FC = () => {
+import { MarkersContext } from '../context/MarkersContext';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
+import type { Asset } from 'react-native-image-picker'; // solo para el tipo
+
+const UI = {
+  bg: '#F4F7FC',
+  card: '#FFFFFF',
+  muted: '#6B7280',
+  border: '#E7E9ED',
+  primary: '#0AC5C5',
+  text: '#0D1313',
+};
+
+type ReportNav   = NativeStackNavigationProp<RootStackParamList, 'Reportar'>;
+type ReportRoute = RouteProp<RootStackParamList, 'Reportar'>;
+
+const ReportScreen: React.FC = () => {
   const { addMarker } = useContext(MarkersContext);
-  const navigation    = useNavigation();
+  const navigation = useNavigation<ReportNav>();
+  const route = useRoute<ReportRoute>();
 
   const [description, setDescription] = useState<string>('');
-  const [coords, setCoords]           = useState<{ latitude: number; longitude: number } | null>(null);
-  const [urgency, setUrgency]         = useState('');
-  const [category, setCategory]       = useState('');
-  const [showUrgencyOptions, setShowUrgencyOptions]   = useState(false);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [urgency, setUrgency] = useState('');
+  const [category, setCategory] = useState('');
+  const [showUrgencyOptions, setShowUrgencyOptions] = useState(false);
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
-  const [photo, setPhoto]             = useState<any>(null);
+  const [photo, setPhoto] = useState<Asset | { uri: string } | null>(null);
 
+  // Pre-carga la imagen si llega desde Welcome (burbujas)
+  useEffect(() => {
+    const uri = route?.params?.imageUri;
+    if (uri) setPhoto({ uri });
+  }, [route?.params?.imageUri]);
+
+  // Colores del pin en el mapa según urgencia
   const getPinColor = (level: string): string => {
     switch (level) {
-      case 'Alta':  return 'red';
-      case 'Media': return 'orange';
-      case 'Baja':  return 'yellow';
-      default:      return 'blue';
+      case 'Alta':  return '#EF4444';
+      case 'Media': return '#F59E0B';
+      case 'Baja':  return '#10B981';
+      default:      return UI.primary;
     }
   };
 
+  // Posición actual
   useEffect(() => {
     Geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setCoords({ latitude: coords.latitude, longitude: coords.longitude });
-      },
+      ({ coords }) => setCoords({ latitude: coords.latitude, longitude: coords.longitude }),
       (error) => console.error('Error obteniendo coordenadas:', error),
       { enableHighAccuracy: true }
     );
   }, []);
 
-  const openCamera = () => {
-    const options: CameraOptions = {
-      mediaType: 'mixed',
-      cameraType: 'back',
-      saveToPhotos: false,
-      videoQuality: 'high',
-      durationLimit: 30,
-    };
-    launchCamera(options, (response) => {
-      if (response.didCancel) {
-        console.log('Usuario canceló la cámara');
-      } else if (response.errorCode) {
-        console.error('Error al abrir la cámara:', response.errorMessage);
-      } else {
-        setPhoto(response.assets?.[0]);
-      }
-    });
-  };
-
-  const requestPermissionAndCreateChannel = async () => {
-    if (Platform.OS === 'android') {
-      await notifee.requestPermission();
-
-      await notifee.createChannel({
-        id: 'ciudamos-alertas',
-        name: 'Alertas de incidentes',
-        importance: AndroidImportance.HIGH,
-      });
-    }
-  };
-
+  // Canal de notificaciones (Android)
   useEffect(() => {
-    requestPermissionAndCreateChannel();
+    const bootstrap = async () => {
+      if (Platform.OS === 'android') {
+        await notifee.requestPermission();
+        await notifee.createChannel({
+          id: 'ciudamos-alertas',
+          name: 'Alertas de incidentes',
+          importance: AndroidImportance.HIGH,
+        });
+      }
+    };
+    bootstrap();
   }, []);
+
+  const canSubmit = !!photo && !!category;
 
   return (
     <View style={styles.container}>
-      <ScrollView>
-
-        <View style={styles.profileContainer}>
-          <ProfileCircle />
-        </View>
-
-        <View style={styles.headerContainer}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Reportar Incidente</Text>
-            <Text style={styles.subtitle}>Completa los siguientes datos</Text>
-          </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Reportar Incidente</Text>
+          <Text style={styles.subtitle}>Completa los siguientes datos</Text>
         </View>
 
         {coords && (
-          <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                latitudeDelta: 0.002,
-                longitudeDelta: 0.002,
-              }}
-              showsUserLocation
-              provider="google"
-            >
-              <Marker
-                coordinate={coords}
-                title="Mi ubicación"
-              />
-            </MapView>
+          <View style={styles.card}>
+            <View style={styles.mapContainer}>
+              <MapView
+                style={styles.map}
+                provider={PROVIDER_GOOGLE}
+                initialRegion={{
+                  latitude: coords.latitude,
+                  longitude: coords.longitude,
+                  latitudeDelta: 0.002,
+                  longitudeDelta: 0.002,
+                }}
+                showsUserLocation
+              >
+                <Marker coordinate={coords} title="Mi ubicación" />
+              </MapView>
+            </View>
+
+            <View style={styles.locBox}>
+              <Text style={styles.sectionLabel}>Ubicación actual</Text>
+              <Text style={styles.locText}>Latitud: {coords.latitude.toFixed(6)}</Text>
+              <Text style={styles.locText}>Longitud: {coords.longitude.toFixed(6)}</Text>
+            </View>
           </View>
         )}
 
-        <View style={styles.locationBox}>
-          <Text style={styles.sectionTitle}>Ubicación actual</Text>
-          {coords ? (
-            <>
-              <Text style={{ color: '#000' }}>
-                Latitud: {coords.latitude.toFixed(6)}
-              </Text>
-              <Text style={{ color: '#000' }}>
-                Longitud: {coords.longitude.toFixed(6)}
-              </Text>
-            </>
-          ) : (
-            <Text>Obteniendo ubicación...</Text>
-          )}
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.sectionTitle}>Nivel de urgencia</Text>
-          <TouchableOpacity
-            style={styles.dropdownButton}
-            onPress={() => setShowUrgencyOptions(!showUrgencyOptions)}
+        {/* Urgencia */}
+        <View style={styles.fieldBlock}>
+          <Text style={styles.sectionLabel}>Nivel de urgencia</Text>
+          <Text
+            onPress={() => setShowUrgencyOptions((s) => !s)}
+            style={[styles.input, styles.inputText, !urgency && styles.placeholder]}
           >
-            <Text style={{ color: '#666' }}>
-              {urgency || 'Selecciona urgencia'}
-            </Text>
-          </TouchableOpacity>
+            {urgency || 'Selecciona urgencia'}
+          </Text>
+
           {showUrgencyOptions && (
-            <View style={styles.dropdownOptions}>
+            <View style={styles.menu}>
               {['Alta', 'Media', 'Baja'].map((opt) => (
-                <TouchableOpacity
+                <Text
                   key={opt}
-                  style={styles.dropdownOption}
+                  style={styles.menuItemText}
                   onPress={() => {
                     setUrgency(opt);
                     setShowUrgencyOptions(false);
                   }}
                 >
-                  <Text>{opt}</Text>
-                </TouchableOpacity>
+                  {opt}
+                </Text>
               ))}
             </View>
           )}
         </View>
 
-        <View style={styles.row}>
-          <Text style={styles.sectionTitle}>Categoría</Text>
-          <TouchableOpacity
-            style={styles.dropdownButton}
-            onPress={() => setShowCategoryOptions(!showCategoryOptions)}
+        {/* Categoría */}
+        <View style={styles.fieldBlock}>
+          <Text style={styles.sectionLabel}>Categoría</Text>
+          <Text
+            onPress={() => setShowCategoryOptions((s) => !s)}
+            style={[styles.input, styles.inputText, !category && styles.placeholder]}
           >
-            <Text style={{ color: '#666' }}>
-              {category || 'Selecciona categoría'}
-            </Text>
-          </TouchableOpacity>
+            {category || 'Selecciona categoría'}
+          </Text>
+
           {showCategoryOptions && (
-            <View style={styles.dropdownOptions}>
+            <View style={styles.menu}>
               {['Seguridad', 'Infraestructura', 'Ambiente'].map((cat) => (
-                <TouchableOpacity
+                <Text
                   key={cat}
-                  style={styles.dropdownOption}
+                  style={styles.menuItemText}
                   onPress={() => {
                     setCategory(cat);
                     setShowCategoryOptions(false);
                   }}
                 >
-                  <Text>{cat}</Text>
-                </TouchableOpacity>
+                  {cat}
+                </Text>
               ))}
             </View>
           )}
         </View>
 
-        <Text style={styles.sectionTitle}>Detalles</Text>
+        {/* Detalles */}
+        <Text style={styles.sectionLabel}>Detalles</Text>
         <TextInput
-          style={styles.textArea}
-          placeholderTextColor="#666"
+          style={[styles.input, styles.textArea]}
+          placeholderTextColor={UI.muted}
           placeholder="Escribe detalles del incidente..."
           multiline
           numberOfLines={4}
@@ -203,68 +190,58 @@ export const ReportScreen: React.FC = () => {
           onChangeText={setDescription}
         />
 
-        <TouchableOpacity style={styles.uploadButton} onPress={openCamera}>
-          <Text style={styles.uploadButtonText}>Agregar foto/video</Text>
-        </TouchableOpacity>
-
+        {/* Preview (sin botones de cámara/galería) */}
         {photo && (
           <View style={styles.imagePreviewBox}>
-            <Image
-              source={{ uri: photo.uri }}
-              style={styles.previewImage}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: (photo as any).uri }} style={styles.previewImage} resizeMode="cover" />
           </View>
         )}
 
-        {photo && (
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={async () => {
-              if (!category.trim()) {
-                Alert.alert('Atención', 'Por favor selecciona una categoría');
-                return;
-              }
+        {/* Submit */}
+        <Text
+          style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]}
+          onPress={async () => {
+            if (!canSubmit) return;
+            if (!coords) {
+              Alert.alert('Ubicación', 'No se pudo obtener la ubicación actual.');
+              return;
+            }
+            const pinColor = getPinColor(urgency);
 
-              const pinColor = getPinColor(urgency);
+            addMarker({
+              id: Date.now().toString(),
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              title: category || 'Incidente',
+              description,
+              photoUri: (photo as any)?.uri,
+              color: pinColor,
+              timestamp: new Date().toISOString(),
+            });
 
-              addMarker({
-                id: Date.now().toString(),
-                latitude: coords!.latitude,
-                longitude: coords!.longitude,
-                title: category,
-                description,
-                photoUri: photo.uri,
-                color: pinColor,
-                timestamp: new Date().toISOString() 
-              });
+            await notifee.displayNotification({
+              title: '🚨 Nuevo incidente reportado',
+              body: `Tipo: ${category} — Ubicación: ${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}`,
+              android: {
+                channelId: 'ciudamos-alertas',
+                smallIcon: 'ic_launcher',
+                importance: AndroidImportance.HIGH,
+                pressAction: { id: 'default' },
+              },
+            });
 
-              await notifee.displayNotification({
-                title: '🚨 Nuevo incidente reportado',
-                body: `Tipo: ${category} — Ubicación: ${coords?.latitude.toFixed(3)}, ${coords?.longitude.toFixed(3)}`,
-                android: {
-                  channelId: 'ciudamos-alertas',
-                  smallIcon: 'ic_launcher',
-                  importance: AndroidImportance.HIGH,
-                  pressAction: { id: 'default' },
-                },
-              });
-
-              Alert.alert('Reporte Completo');
-
-              setDescription('');
-              setCategory('');
-              setUrgency('');
-              setPhoto(null);
-              setShowUrgencyOptions(false);
-              setShowCategoryOptions(false);
-              navigation.goBack();
-            }}
-          >
-            <Text style={styles.submitButtonText}>Subir reporte</Text>
-          </TouchableOpacity>
-        )}
-
+            Alert.alert('Listo', 'Reporte enviado correctamente.');
+            setDescription('');
+            setCategory('');
+            setUrgency('');
+            setPhoto(null);
+            setShowUrgencyOptions(false);
+            setShowCategoryOptions(false);
+            navigation.goBack();
+          }}
+        >
+          Subir reporte
+        </Text>
       </ScrollView>
     </View>
   );
@@ -275,114 +252,112 @@ export default ReportScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: UI.bg,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  headerContainer: {
-    marginTop: 90,
-    marginBottom: 15,
-  },
-  profileContainer: {
-    top: -30,
-    right: -40,
-  },
-  titleContainer: {
+
+  /* Header */
+  headerBlock: {
     alignItems: 'center',
-    paddingHorizontal: 15,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 6,
-    color: '#000',
+    fontSize: 22,
+    fontWeight: '900',
+    color: UI.text,
   },
   subtitle: {
-    fontSize: 16,
-    marginBottom: 16,
-    color: '#666',
+    fontSize: 14,
+    color: UI.muted,
+    marginTop: 4,
   },
-  locationBox: {
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 20,
-    borderRadius: 8,
-  },
-  sectionTitle: {
-    fontWeight: 'bold',
-    marginBottom: 6,
-    color: '#000',
-  },
-  row: {
-    marginBottom: 20,
-  },
-  dropdownButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    padding: 10,
-    marginTop: 6,
-    backgroundColor: '#fff',
-  },
-  dropdownOptions: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    marginTop: 6,
-    backgroundColor: '#f9f9f9',
-  },
-  dropdownOption: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    padding: 10,
-    textAlignVertical: 'top',
-    color: '#000',
-    backgroundColor: '#fff',
-  },
-  uploadButton: {
-    backgroundColor: '#007AFF',
+
+  /* Map + ubicación card */
+  card: {
+    backgroundColor: UI.card,
+    borderRadius: 16,
     padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
+    marginBottom: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: UI.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  uploadButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  mapContainer: {
+    height: 180,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
+  map: { flex: 1 },
+  locBox: { marginTop: 10 },
+  locText: { color: UI.text, fontSize: 12 },
+
+  /* Fields */
+  sectionLabel: {
+    fontWeight: '800',
+    color: UI.text,
+    marginBottom: 6,
+  },
+  fieldBlock: { marginBottom: 16 },
+  input: {
+    backgroundColor: UI.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: UI.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  inputText: { color: UI.text, fontSize: 16 },
+  placeholder: { color: UI.muted },
+
+  textArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+
+  /* Dropdown simple */
+  menu: {
+    backgroundColor: UI.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: UI.border,
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  menuItemText: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: UI.border,
+    color: UI.text,
+    fontSize: 16,
+  },
+
+  /* Preview */
   imagePreviewBox: {
-    marginTop: 20,
+    marginTop: 16,
     alignItems: 'center',
   },
   previewImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 10,
-  },
-  submitButton: {
-    marginTop: 20,
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  mapContainer: {
-    height: 200,
+    height: 220,
     borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 20,
   },
-  map: {
-    flex: 1,
+
+  /* Submit como botón de texto estilizado */
+  submitButton: {
+    marginTop: 16,
+    backgroundColor: UI.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    textAlign: 'center',
+    color: '#fff',
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    fontSize: 16,
   },
 });

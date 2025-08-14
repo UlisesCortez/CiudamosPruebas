@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+// src/screens/WelcomeScreen.tsx
+import React, { useEffect, useState, useContext } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,36 +8,29 @@ import {
   Platform,
   Text,
   Image,
-  ScrollView,
   Dimensions,
   Pressable,
   Animated,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
+import MI from 'react-native-vector-icons/MaterialIcons';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
+import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker';
+import Toast from 'react-native-toast-message';
 import ButtonSheet from '../presentation/components/ui/ButtonSheet';
 import RecentReportsSheet from '../presentation/components/ui/RecentReportsSheet';
-import TopBar, { APPBAR_HEIGHT } from '../presentation/components/ui/TopBar';
+import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
+import { useTheme } from '../theme/theme';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 
-import IconMI from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
-
+const UI = { primary: '#0AC5C5' };
 const { width: SCREEN_W } = Dimensions.get('window');
 const PANEL_HEIGHT = 800;
 
-const UI = {
-  bg: '#F4F7FC',
-  card: '#FFFFFF',
-  muted: '#6B7280',
-  border: '#D7DDE5',
-  primary: '#0AC5C5',
-  text: '#0D1313',
-};
+// Sube la burbuja de forma estática (sin animaciones con la sheet)
+const FAB_EXTRA_BOTTOM = 96; // súbelo más/menos si lo quieres ajustar
 
 const MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#E7E9ED' }] },
@@ -51,18 +45,15 @@ const MAP_STYLE = [
   { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] },
 ];
 
-/* =========================
-   FAB RADIAL (compacto)
-   ========================= */
-const FabRadial = ({
-  actions,
-  tint = UI.primary,
-}: {
+/** ========== FAB RADIAL ========== */
+const FabRadial: React.FC<{
   actions: Array<{ key: string; icon: string; onPress: () => void }>;
-  tint?: string;
-}) => {
+  tabBarSpace: number;
+  extraBottom?: number; // ⬅️ nuevo: elevar sin animaciones
+}> = ({ actions, tabBarSpace, extraBottom = 0 }) => {
   const [open, setOpen] = React.useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = React.useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   const toggle = () => {
     setOpen(o => !o);
@@ -74,24 +65,30 @@ const FabRadial = ({
     }).start();
   };
 
-  // abanico hacia arriba-izquierda
-  const R = 56;
+  const R = 60;
   const CENTER = -100;
   const SPREAD = 100;
-
   const angles =
     actions.length === 1
       ? [CENTER]
       : actions.map((_, i) => CENTER - SPREAD / 1 + (SPREAD / (actions.length - 1.5)) * i);
 
   return (
-    <View pointerEvents="box-none" style={styles.fabArea}>
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.fabArea,
+        { bottom: insets.bottom + tabBarSpace + 24 + extraBottom },
+      ]}
+    >
       {open && <Pressable style={StyleSheet.absoluteFill} onPress={toggle} />}
+
       {actions.map((a, i) => {
         const theta = (angles[i] * Math.PI) / 180;
         const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.cos(theta)] });
         const ty = anim.interpolate({ inputRange: [0, 1], outputRange: [0, R * Math.sin(theta)] });
         const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
+
         return (
           <Animated.View
             key={a.key}
@@ -101,24 +98,25 @@ const FabRadial = ({
             ]}
           >
             <Pressable
-              style={[styles.smallFab, { backgroundColor: tint }]}
+              style={styles.smallFab}
               onPress={() => {
                 toggle();
                 a.onPress();
               }}
             >
-              <IconMI name={a.icon as any} size={20} color="#fff" />
+              <MI name={a.icon as any} size={20} color="#fff" />
             </Pressable>
           </Animated.View>
         );
       })}
-      <Pressable style={[styles.fabMain, { backgroundColor: tint }]} onPress={toggle}>
+
+      <Pressable style={styles.fabMain} onPress={toggle}>
         <Animated.View
           style={{
             transform: [{ rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }],
           }}
         >
-          <IconMI name="add" size={28} color="#fff" />
+          <MI name="add" size={28} color="#fff" />
         </Animated.View>
       </Pressable>
     </View>
@@ -126,14 +124,95 @@ const FabRadial = ({
 };
 
 const WelcomeScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<any>();
+  const { markers } = useContext(MarkersContext);
+  const { colors } = useTheme();
+
+  const tabBarHeight = React.useContext(BottomTabBarHeightContext) ?? 0;
   const insets = useSafeAreaInsets();
 
   const [region, setRegion] = useState<Region | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
-  const { markers } = useContext(MarkersContext);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+
+  /* ===== permisos y acciones cámara/galería ===== */
+  const requestCameraPermission = async () => {
+    if (Platform.OS !== 'android') return true;
+    const res = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+      title: 'Permiso de cámara',
+      message: 'Necesitamos acceder a tu cámara para tomar fotos de los reportes.',
+      buttonPositive: 'Aceptar',
+    });
+    return res === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const requestMediaPermission = async () => {
+    if (Platform.OS !== 'android') return true;
+    const perm =
+      Platform.Version >= 33
+        ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+        : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+    const res = await PermissionsAndroid.request(perm, {
+      title: 'Permiso de fotos',
+      message: 'Necesitamos acceder a tus fotos para adjuntar al reporte.',
+      buttonPositive: 'Aceptar',
+    });
+    return res === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const goToReportWithAsset = (asset?: Asset) => {
+    if (!asset?.uri) {
+      Toast.show({ type: 'error', text1: 'No se obtuvo la imagen' });
+      return;
+    }
+    // Ajusta el nombre de la ruta si tu stack usa 'Report' o 'Reportar'
+    navigation.getParent()?.navigate('Reportar' as never, { imageUri: asset.uri } as never);
+  };
+
+  const openCamera = async () => {
+    const ok = await requestCameraPermission();
+    if (!ok) {
+      Toast.show({ type: 'info', text1: 'Permiso de cámara denegado' });
+      return;
+    }
+    const result = await launchCamera({
+      mediaType: 'photo',
+      cameraType: 'back',
+      quality: 0.8 as const,
+      saveToPhotos: false,
+      includeBase64: false,
+      presentationStyle: 'fullScreen',
+    });
+    if (result.didCancel) return;
+    if (result.errorCode) {
+      Toast.show({ type: 'error', text1: 'Error de cámara', text2: result.errorMessage });
+      return;
+    }
+    goToReportWithAsset(result.assets?.[0]);
+  };
+
+  const openGallery = async () => {
+    const ok = await requestMediaPermission();
+    if (!ok) {
+      Toast.show({ type: 'info', text1: 'Permiso de fotos denegado' });
+      return;
+    }
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+      quality: 0.8 as const,
+      includeBase64: false,
+    });
+    if (result.didCancel) return;
+    if (result.errorCode) {
+      Toast.show({ type: 'error', text1: 'Error al abrir galería', text2: result.errorMessage });
+      return;
+    }
+    goToReportWithAsset(result.assets?.[0]);
+  };
+  /* ============================================== */
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -150,7 +229,6 @@ const WelcomeScreen: React.FC = () => {
             granted[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
             PermissionsAndroid.RESULTS.GRANTED;
           if (!fine && !coarse) {
-            console.warn('Permisos de ubicación no concedidos');
             setLoading(false);
             return;
           }
@@ -166,10 +244,7 @@ const WelcomeScreen: React.FC = () => {
             });
             setLoading(false);
           },
-          (error) => {
-            console.error('Error al obtener ubicación:', error);
-            setLoading(false);
-          },
+          () => setLoading(false),
           { enableHighAccuracy: true, timeout: 20000 }
         );
 
@@ -179,13 +254,12 @@ const WelcomeScreen: React.FC = () => {
               prev ? { ...prev, latitude: coords.latitude, longitude: coords.longitude } : null
             );
           },
-          (error) => console.error('Error de ubicación continua:', error),
+          () => {},
           { enableHighAccuracy: false, distanceFilter: 10, interval: 5000 }
         );
 
         return () => Geolocation.clearWatch(watchId);
-      } catch (err) {
-        console.error('Error pidiendo permisos de ubicación:', err);
+      } catch {
         setLoading(false);
       }
     };
@@ -228,37 +302,21 @@ const WelcomeScreen: React.FC = () => {
 
   if (!region || loading) {
     return (
-      <View style={styles.loaderContainer}>
+      <View style={[styles.loaderContainer, { backgroundColor: colors.bg }]}>
         <ActivityIndicator size="large" color={UI.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* TopBar compacto */}
-      <View style={styles.topOverlay}>
-        <TopBar
-          title="Ciudamos"
-          onProfilePress={() => navigation.navigate('Profile')}
-          onSearchPress={() => navigation.navigate('Reports')}
-          onBellPress={() => navigation.navigate('Reports')}
-        />
-      </View>
-
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <MapView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={region}
         customMapStyle={MAP_STYLE}
-        mapPadding={{
-          top: insets.top + APPBAR_HEIGHT + 6,    // espacio exacto para el app bar
-          right: 8,
-          bottom: 200,                             // deja ver la sheet levantada
-          left: 8,
-        }}
+        mapPadding={{ top: 88, right: 8, bottom: 24, left: 8 }}
       >
-        {/* Mi ubicación */}
         {region && (
           <Marker coordinate={region} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.meOuter}>
@@ -267,7 +325,6 @@ const WelcomeScreen: React.FC = () => {
           </Marker>
         )}
 
-        {/* Marcadores */}
         {markers.map(m => (
           <Marker
             key={m.id}
@@ -283,26 +340,28 @@ const WelcomeScreen: React.FC = () => {
         ))}
       </MapView>
 
-      {/* FAB radial */}
+      {/* FAB fijo, más arriba para no tapar la sheet */}
       <FabRadial
-        tint={UI.primary}
+        tabBarSpace={tabBarHeight}
+        extraBottom={FAB_EXTRA_BOTTOM}
         actions={[
-          { key: 'center',  icon: 'my-location',      onPress: handleRecenter },
-          { key: 'report',  icon: 'add-location-alt', onPress: () => navigation.navigate('Report') },
-          { key: 'reports', icon: 'list-alt',         onPress: () => navigation.navigate('Reports') },
+          { key: 'camera',  icon: 'photo-camera',  onPress: openCamera },
+          { key: 'gallery', icon: 'photo-library', onPress: openGallery },
+          { key: 'center',  icon: 'my-location',   onPress: handleRecenter },
         ]}
       />
 
-      {/* Sheet de reportes recientes (colapsada más alta) */}
       <RecentReportsSheet
-        collapsedPx={170}
+        collapsedPx={150}
         onPressItem={(m) => setSelected(m)}
+        bottomInset={insets.bottom + (tabBarHeight ?? 0) + 12}
+        startIndex={0}
+        // sin onIndexChange ni animaciones
       />
 
-      {/* Panel detalle de un reporte */}
       {selected && (
         <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_HEIGHT}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          <View style={{ paddingBottom: 24 }}>
             <View style={styles.handleBar} />
             <Text style={styles.panelTitle}>{selected.title}</Text>
             <Text style={styles.panelDesc}>{selected.description}</Text>
@@ -322,7 +381,7 @@ const WelcomeScreen: React.FC = () => {
                 resizeMode="contain"
               />
             )}
-          </ScrollView>
+          </View>
         </ButtonSheet>
       )}
     </View>
@@ -331,80 +390,44 @@ const WelcomeScreen: React.FC = () => {
 
 export default WelcomeScreen;
 
-/* =========================
-   Styles
-   ========================= */
+/* ========== styles ========== */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: UI.bg },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: UI.bg },
+  container: { flex: 1 },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   map: { flex: 1 },
 
-  topOverlay: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 10 },
-
-  /** Punto de usuario */
   meOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: UI.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 20, height: 20, borderRadius: 10, backgroundColor: '#ffffff',
+    borderWidth: 2, borderColor: UI.primary, alignItems: 'center', justifyContent: 'center',
   },
   meInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: UI.primary },
 
-  /** Pin de reporte */
   pinWrap: { alignItems: 'center' },
   pinHead: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#fff',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   pinStem: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    marginTop: -1,
+    width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 8,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent', marginTop: -1,
   },
 
-  /** FAB y radial */
-  fabArea: { position: 'absolute', right: 12, bottom: 295 }, // evita chocar con la sheet
+  fabArea: { position: 'absolute', right: 12 },
   fabMain: {
-    width: 60,
-    height: 60,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: UI.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    width: 60, height: 60, borderRadius: 28, backgroundColor: UI.primary,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: UI.primary, shadowOpacity: 0.25, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 }, elevation: 4,
   },
   smallFab: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 50, height: 50, borderRadius: 25, backgroundColor: UI.primary,
+    alignItems: 'center', justifyContent: 'center',
   },
   fabItem: { position: 'absolute', right: 20, bottom: 52, alignItems: 'center' },
 
-  /** Panel detalle */
-  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: UI.border, alignSelf: 'center', marginBottom: 8 },
-  panelTitle: { fontSize: 20, fontWeight: '800', color: UI.text, marginBottom: 6 },
+  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: '#D7DDE5', alignSelf: 'center', marginBottom: 8 },
+  panelTitle: { fontSize: 20, fontWeight: '800', color: '#0D1313', marginBottom: 6 },
   panelDesc: { fontSize: 16, color: '#1f2937', marginBottom: 6 },
-  panelTime: { fontSize: 12, color: UI.muted },
+  panelTime: { fontSize: 12, color: '#6B7280' },
 });

@@ -9,6 +9,7 @@ import ReportScreen from '../../screens/ReportScreen';
 import ReportsScreen from '../../screens/ListaReportesScreen';
 import ProfileScreen from '../../screens/ProfileScreen';
 import WelcomeScreen from '../../screens/WelcomeScreen';
+import RewardsScreen from '../../screens/RewardsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -17,25 +18,33 @@ export type RootStackParamList = {
   Welcome: undefined;
   Report: undefined;
   Reports: undefined;
+  Reportar: { imageUri?: string } | undefined; // 👈 agrega esto
+  Rewards: undefined;
   Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => (
-  <Stack.Navigator initialRouteName="Tabs" screenOptions={{ headerShown: false }}>
-    {/* Para desarrollo dejamos Tabs como inicial para que veas la barra */}
-    <Stack.Screen name="Tabs" component={MainTabNavigator} />
-
-    {/* Rutas del flujo fuera de tabs (cuando toque) */}
+  <Stack.Navigator
+    screenOptions={{ headerShown: false }}
+    initialRouteName="Login"  // <- ahora inicia en Login
+  >
+    {/* Flujo de autenticación */}
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
-
-    {/* Estas existen por si las navegas directo, pero dentro de Tabs ya están */}
     <Stack.Screen name="Welcome" component={WelcomeScreen} />
+
+    {/* App autenticada */}
+    <Stack.Screen name="Tabs" component={MainTabNavigator} />
+
+    {/* Rutas accesibles directo si las navegas */}
     <Stack.Screen name="Report" component={ReportScreen} />
     <Stack.Screen name="Reports" component={ReportsScreen} />
     <Stack.Screen name="Profile" component={ProfileScreen} />
+    <Stack.Screen name="Reportar" component={ReportScreen} />
+    <Stack.Screen name="Rewards" component={RewardsScreen} />
+
   </Stack.Navigator>
 );
 
