@@ -1,5 +1,5 @@
 // src/screens/ReportScreen.tsx
-import React, { useEffect, useState, useContext, useMemo } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,16 @@ import {
   Platform,
   KeyboardAvoidingView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { launchImageLibrary } from 'react-native-image-picker';
+
+import { analyzeReportImage, AiAutofill } from '../services/ai';
 
 import { MarkersContext, Marker as ReportMarker } from '../context/MarkersContext';
 // Tipos opcionales
@@ -60,13 +64,17 @@ const ReportScreen: React.FC = () => {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(
     markerFromList ? { latitude: markerFromList.latitude, longitude: markerFromList.longitude } : null
   );
-  const [urgency, setUrgency] = useState(''); // opcional
+  const [urgency, setUrgency] = useState(''); // Alta | Media | Baja
   const [category, setCategory] = useState<string>(markerFromList?.title ?? '');
   const [showUrgencyOptions, setShowUrgencyOptions] = useState(false);
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const [photo, setPhoto] = useState<Asset | { uri: string } | null>(
     imageUri ? { uri: imageUri } : markerFromList?.photoUri ? { uri: markerFromList.photoUri } : null
   );
+
+  // IA
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiConfidence, setAiConfidence] = useState<number | null>(null);
 
   // Colores del pin en el mapa según urgencia (para modo crear)
   const getPinColor = (level: string): string => {
@@ -102,6 +110,48 @@ const ReportScreen: React.FC = () => {
     };
     bootstrap();
   }, [isDetail]);
+
+  // Elegir/Cambiar foto (solo crear)
+  const onPickImage = useCallback(async () => {
+    if (isDetail) return;
+    const res = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.9,
+      selectionLimit: 1,
+    });
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) return;
+    setPhoto({ uri });
+  }, [isDetail]);
+
+  // Cuando hay foto (y no es detalle), llama a la IA para autollenar
+  useEffect(() => {
+    const runAI = async () => {
+      if (isDetail || !photo?.uri) return;
+      try {
+        setAiLoading(true);
+        // Llama a tu backend de IA
+        const ai: AiAutofill = await analyzeReportImage(photo.uri);
+
+        // Autollenar campos
+        setCategory(ai.categoria);     // "Seguridad" | "Movilidad" | "Infraestructura" | "Medio ambiente"
+        setUrgency(ai.gravedad);       // "Alta" | "Media" | "Baja"
+        // Si ya había texto del usuario, no lo pisamos; si estaba vacío, usamos el de IA
+        setDescription(prev => (prev?.trim()?.length ? prev : ai.descripcion));
+        setAiConfidence(ai.confianza);
+
+        if (ai.confianza < 0.55) {
+          Alert.alert('Revisa los datos', 'La confianza de la IA es baja. Ajusta categoría o descripción si es necesario.');
+        }
+      } catch (e: any) {
+        console.error('IA error:', e?.message || e);
+        Alert.alert('Error de IA', e?.message ?? 'No se pudo analizar la imagen.');
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    runAI();
+  }, [photo?.uri, isDetail]);
 
   const canSubmit = !!photo && !!category && !!coords && !isDetail;
 
@@ -195,7 +245,8 @@ const ReportScreen: React.FC = () => {
                 <>
                   <Pressable
                     onPress={() => setShowCategoryOptions((s) => !s)}
-                    style={[styles.input, styles.rowBetween]}
+                    style={[styles.input, styles.rowBetween, aiLoading && { opacity: 0.6 }]}
+                    disabled={aiLoading}
                   >
                     <Text style={[styles.inputText, !category && styles.placeholder]}>
                       {category || 'Selecciona categoría'}
@@ -205,7 +256,7 @@ const ReportScreen: React.FC = () => {
 
                   {showCategoryOptions && (
                     <View style={styles.menu}>
-                      {['Seguridad', 'Infraestructura', 'Ambiente'].map((cat) => (
+                      {['Seguridad', 'Movilidad', 'Infraestructura', 'Medio ambiente'].map((cat) => (
                         <Pressable
                           key={cat}
                           onPress={() => {
@@ -230,7 +281,8 @@ const ReportScreen: React.FC = () => {
 
                 <Pressable
                   onPress={() => setShowUrgencyOptions((s) => !s)}
-                  style={[styles.input, styles.rowBetween]}
+                  style={[styles.input, styles.rowBetween, aiLoading && { opacity: 0.6 }]}
+                  disabled={aiLoading}
                 >
                   <Text style={[styles.inputText, !urgency && styles.placeholder]}>
                     {urgency || 'Selecciona urgencia'}
@@ -268,27 +320,64 @@ const ReportScreen: React.FC = () => {
               </View>
             ) : (
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, aiLoading && { opacity: 0.7 }]}
                 placeholderTextColor={UI.muted}
                 placeholder="Escribe detalles del incidente..."
                 multiline
                 numberOfLines={4}
                 value={description}
                 onChangeText={setDescription}
+                editable={!aiLoading}
               />
             )}
 
             {/* FOTO */}
-            {photo && (
-              <View style={styles.card}>
-                <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Foto</Text>
-                <Image
-                  source={{ uri: (photo as any).uri }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                />
+            <View style={styles.card}>
+              <View style={[styles.rowBetween, { marginBottom: 10 }]}>
+                <Text style={styles.sectionLabel}>Foto</Text>
+                {!isDetail && (
+                  <Pressable
+                    onPress={onPickImage}
+                    style={({ pressed }) => [
+                      styles.btnChip,
+                      pressed && { opacity: 0.85 },
+                      aiLoading && { opacity: 0.6 },
+                    ]}
+                    disabled={aiLoading}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.btnChipText}>{photo ? 'Cambiar foto' : 'Elegir foto'}</Text>
+                  </Pressable>
+                )}
               </View>
-            )}
+
+              {photo ? (
+                <>
+                  <Image
+                    source={{ uri: (photo as any).uri }}
+                    style={styles.previewImage}
+                    resizeMode="cover"
+                  />
+                  {!!aiConfidence && (
+                    <Text style={styles.aiHint}>
+                      Sugerido por IA · Confianza: {aiConfidence.toFixed(2)}
+                    </Text>
+                  )}
+                  {aiLoading && (
+                    <View style={styles.aiOverlay}>
+                      <ActivityIndicator size="large" />
+                      <Text style={{ color: UI.muted, marginTop: 6 }}>Analizando imagen…</Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                !isDetail && (
+                  <Text style={{ color: UI.muted }}>
+                    Agrega una foto para habilitar el autollenado con IA.
+                  </Text>
+                )
+              )}
+            </View>
           </ScrollView>
 
           {/* FOOTER (solo modo crear) */}
@@ -304,11 +393,11 @@ const ReportScreen: React.FC = () => {
 
               <Pressable
                 onPress={handleSubmit}
-                disabled={!canSubmit}
+                disabled={!canSubmit || aiLoading}
                 style={({ pressed }) => [
                   styles.btnPrimary,
-                  !canSubmit && { opacity: 0.5 },
-                  pressed && canSubmit && { opacity: 0.9 },
+                  (!canSubmit || aiLoading) && { opacity: 0.5 },
+                  pressed && canSubmit && !aiLoading && { opacity: 0.9 },
                 ]}
                 hitSlop={6}
               >
@@ -432,6 +521,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#EAEAEA',
   },
 
+  aiHint: {
+    marginTop: 8,
+    color: UI.muted,
+    fontSize: 12,
+  },
+  aiOverlay: {
+    position: 'absolute',
+    top: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+
   footer: {
     position: 'absolute',
     left: 0,
@@ -470,5 +572,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '900',
     letterSpacing: 0.2,
+  },
+  btnChip: {
+    backgroundColor: UI.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: UI.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  btnChipText: {
+    color: UI.text,
+    fontWeight: '700',
   },
 });

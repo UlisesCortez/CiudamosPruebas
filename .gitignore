@@ -73,3 +73,11 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+node_modules/
+android/app/build/
+ios/build/
+.env
+ai-server/node_modules/
+ai-server/.env
+ai-server/.data/
+uploads/
