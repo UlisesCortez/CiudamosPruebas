@@ -11,6 +11,7 @@ import ReportsScreen from '../../screens/ListaReportesScreen';
 import ProfileScreen from '../../screens/ProfileScreen';
 import WelcomeScreen from '../../screens/WelcomeScreen';
 import RewardsScreen from '../../screens/RewardsScreen';
+import DealsScreen from '../../screens/DealScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -23,6 +24,7 @@ export type RootStackParamList = {
   Rewards: undefined;
   Profile: undefined;
   DetalleReporte: { marker: Marker }; // ⬅️ NUEVO
+  Descuentos: undefined; // 👈 nueva ruta
 
 };
 
@@ -47,6 +49,7 @@ const RootNavigator: React.FC = () => (
     <Stack.Screen name="Profile" component={ProfileScreen} />
     <Stack.Screen name="Reportar" component={ReportScreen} />
     <Stack.Screen name="Rewards" component={RewardsScreen} />
+    <Stack.Screen name="Descuentos" component={DealsScreen} options={{ title: 'Descuentos' }} />
   </Stack.Navigator>
 );
 

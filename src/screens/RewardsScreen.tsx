@@ -1,8 +1,12 @@
 // src/screens/RewardsScreen.tsx
 import React, { useContext, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MI from 'react-native-vector-icons/MaterialIcons';
+
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
 
 import { MarkersContext, Marker } from '../context/MarkersContext';
 
@@ -15,10 +19,13 @@ const UI = {
   text: '#0D1313',
 };
 
+type Nav = NativeStackNavigationProp<RootStackParamList, any>;
+
 const REWARD_PER_REPORT = 5; // 5 tokens por reporte
 
 const RewardsScreen: React.FC = () => {
   const { markers } = useContext(MarkersContext);
+  const navigation = useNavigation<Nav>();
 
   // Total de tokens
   const totalReward = useMemo(
@@ -58,6 +65,8 @@ const RewardsScreen: React.FC = () => {
     </View>
   );
 
+  const goDeals = () => navigation.navigate('Descuentos');
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Encabezado */}
@@ -74,6 +83,15 @@ const RewardsScreen: React.FC = () => {
         </View>
       </View>
 
+      {/* Botón para ver descuentos */}
+      <Pressable
+        onPress={goDeals}
+        style={({ pressed }) => [styles.ctaBtn, pressed && { opacity: 0.9 }]}
+        hitSlop={6}
+      >
+        <Text style={styles.ctaText}>Ver descuentos disponibles</Text>
+      </Pressable>
+
       {/* Lista o estado vacío */}
       {markers.length === 0 ? (
         <View style={styles.emptyBox}>
@@ -84,6 +102,15 @@ const RewardsScreen: React.FC = () => {
           <Text style={styles.emptyText}>
             Reporta incidentes en tu zona para comenzar a ganar tokens.
           </Text>
+
+          {/* CTA también en estado vacío */}
+          <Pressable
+            onPress={goDeals}
+            style={({ pressed }) => [styles.ctaGhost, pressed && { opacity: 0.9 }]}
+            hitSlop={6}
+          >
+            <Text style={styles.ctaGhostText}>Explorar descuentos</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -122,7 +149,7 @@ const styles = StyleSheet.create({
     backgroundColor: UI.card,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: UI.border,
     shadowColor: '#000',
@@ -142,6 +169,16 @@ const styles = StyleSheet.create({
   },
   totalLabel: { color: UI.muted, fontSize: 12, marginBottom: 2 },
   totalAmount: { color: UI.text, fontSize: 24, fontWeight: '900' },
+
+  // CTA principal
+  ctaBtn: {
+    backgroundColor: UI.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ctaText: { color: '#fff', fontWeight: '900', letterSpacing: 0.2 },
 
   rowCard: {
     flexDirection: 'row',
@@ -175,7 +212,7 @@ const styles = StyleSheet.create({
   rowReward: { fontSize: 16, fontWeight: '900', color: UI.primary },
 
   emptyBox: {
-    marginTop: 32,
+    marginTop: 24,
     alignItems: 'center',
     paddingHorizontal: 16,
   },
@@ -189,5 +226,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: UI.text, marginBottom: 4 },
-  emptyText: { fontSize: 13, color: UI.muted, textAlign: 'center' },
+  emptyText: { fontSize: 13, color: UI.muted, textAlign: 'center', marginBottom: 10 },
+
+  // CTA secundario (ghost)
+  ctaGhost: {
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: UI.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: UI.border,
+  },
+  ctaGhostText: {
+    color: UI.text,
+    fontWeight: '800',
+  },
 });

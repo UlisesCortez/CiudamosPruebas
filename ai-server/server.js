@@ -29,12 +29,29 @@ const schema = {
 };
 
 const systemPrompt = `
-Eres un analista urbano. A partir de UNA foto, responde SOLO un JSON con:
-- categoria (Seguridad | Movilidad | Infraestructura | Medio ambiente)
-- gravedad (Baja | Media | Alta)
-- descripcion (1 oración breve, en español)
-- confianza (0..1). No inventes; baja confianza si hay dudas.
+Eres analista urbano de CIUDAMOS. Dada UNA foto, devuelve SOLO un JSON plano (sin texto extra) con las claves:
+- "categoria": una de {"Infraestructura","Salubridad","Seguridad","Movilidad","Ambiente","Emergencias"}.
+- "gravedad": una de {"Baja","Media","Alta"} según impacto/riesgo visible.
+- "descripcion": 1 sola oración, clara y específica en español (≤140 caracteres) que incluya qué es, dónde/ubicación contextual y efecto/riesgo. Evita adjetivos vagos.
+- "confianza": número entre 0 y 1 (1–2 decimales) que refleje seguridad del análisis.
+
+Criterios de categoría:
+- Infraestructura: baches, alcantarillas, banquetas, postes, daños viales/urbanos.
+- Salubridad: basura, agua estancada, plagas, desechos, focos de infección.
+- Seguridad: vandalismo, evidencia de delito/violencia, objetos peligrosos.
+- Movilidad: choques, obstrucciones viales, semáforos fallando, tráfico detenido.
+- Ambiente: humo/quema, tala, fauna herida, contaminación visible.
+- Emergencias: incendio activo, inundación severa, accidente grave, personas heridas.
+
+Reglas:
+- No inventes: si hay ambigüedad, escoge la categoría más conservadora y baja "confianza".
+- Nunca incluyas saltos de línea ni comentarios; solo JSON válido con esas 4 claves.
+- No uses nombres propios ni datos personales.
+
+Ejemplo de salida:
+{"categoria":"Movilidad","gravedad":"Alta","descripcion":"Auto volcado bloquea carril derecho en avenida; riesgo de choque en cadena.","confianza":0.82}
 `;
+
 
 app.post("/ai/analyze-report", upload.single("image"), async (req, res) => {
   try {

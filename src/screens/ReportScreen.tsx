@@ -38,6 +38,50 @@ const UI = {
   text: '#0D1313',
 };
 
+// Categorías canónicas de REPORTE
+const REPORT_CATEGORIES = [
+  'Infraestructura',
+  'Salubridad',
+  'Seguridad',
+  'Movilidad',
+  'Ambiente',
+  'Emergencias',
+] as const;
+type ReportCategory = typeof REPORT_CATEGORIES[number];
+
+// Normaliza cualquier string de la IA a nuestras categorías canónicas
+const normalizeCategory = (raw?: string): ReportCategory | '' => {
+  if (!raw) return '';
+  const s = raw.trim().toLowerCase();
+
+  // mapas rápidos por palabra clave/sinónimos (agrega más si lo necesitas)
+  if (/(infra|bache|banqueta|alcantarilla|poste|pavimento|coladera)/.test(s)) return 'Infraestructura';
+  if (/(salubr|salud|higien|basura|residu|plaga)/.test(s)) return 'Salubridad';
+  if (/(seguri|robo|vandal|violenc|sospech|delito|asalt)/.test(s)) return 'Seguridad';
+  if (/(movil|tr[aá]fico|transit|transpor|sema[fó|fo]ro|estacionamiento|v[ií]a)/.test(s)) return 'Movilidad';
+  if (/(ambiente|medio ambiente|ecol|contamina|smog|ruido|arbol|fauna)/.test(s)) return 'Ambiente';
+  if (/(emergen|incend|choque|acciden|inund|siniestro|auxilio)/.test(s)) return 'Emergencias';
+
+  // match exacto por si viene ya “bien”
+  const exact = REPORT_CATEGORIES.find(c => c.toLowerCase() === s);
+  if (exact) return exact;
+
+  // mapeos directos comunes
+  const map: Record<string, ReportCategory> = {
+    'medio ambiente': 'Ambiente',
+    'environment': 'Ambiente',
+    'security': 'Seguridad',
+    'mobility': 'Movilidad',
+    'infrastructure': 'Infraestructura',
+    'emergency': 'Emergencias',
+    'emergencia': 'Emergencias',
+    'health': 'Salubridad',
+  };
+  if (map[s as keyof typeof map]) return map[s as keyof typeof map];
+
+  return ''; // si no estamos seguros, no autoseleccionamos
+};
+
 // Si tu Root define 'Reportar', mantenlo
 type ReportNav   = NativeStackNavigationProp<RootStackParamList, 'Reportar'>;
 type ReportRoute = RouteProp<RootStackParamList, 'Reportar'>;
@@ -133,15 +177,20 @@ const ReportScreen: React.FC = () => {
         // Llama a tu backend de IA
         const ai: AiAutofill = await analyzeReportImage(photo.uri);
 
-        // Autollenar campos
-        setCategory(ai.categoria);     // "Seguridad" | "Movilidad" | "Infraestructura" | "Medio ambiente"
-        setUrgency(ai.gravedad);       // "Alta" | "Media" | "Baja"
+        // Autollenar campos usando normalización a 6 categorías
+        const canon = normalizeCategory(ai.categoria);
+        if (canon) setCategory(canon);
+        setUrgency(ai.gravedad); // "Alta" | "Media" | "Baja"
+
         // Si ya había texto del usuario, no lo pisamos; si estaba vacío, usamos el de IA
         setDescription(prev => (prev?.trim()?.length ? prev : ai.descripcion));
         setAiConfidence(ai.confianza);
 
         if (ai.confianza < 0.55) {
-          Alert.alert('Revisa los datos', 'La confianza de la IA es baja. Ajusta categoría o descripción si es necesario.');
+          Alert.alert(
+            'Revisa los datos',
+            'La confianza de la IA es baja. Ajusta categoría o descripción si es necesario.'
+          );
         }
       } catch (e: any) {
         console.error('IA error:', e?.message || e);
@@ -256,7 +305,7 @@ const ReportScreen: React.FC = () => {
 
                   {showCategoryOptions && (
                     <View style={styles.menu}>
-                      {['Seguridad', 'Movilidad', 'Infraestructura', 'Medio ambiente'].map((cat) => (
+                      {REPORT_CATEGORIES.map((cat) => (
                         <Pressable
                           key={cat}
                           onPress={() => {

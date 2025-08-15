@@ -81,3 +81,7 @@ ai-server/node_modules/
 ai-server/.env
 ai-server/.data/
 uploads/
+node_modules/
+android/app/build/
+ios/Pods/
+ai-server/.env

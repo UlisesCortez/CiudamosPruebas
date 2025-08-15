@@ -21,8 +21,10 @@ const SERVICES: Service[] = [
   { id: 'municipio', name: 'Atención ciudadana', phone: '1234567893', icon: 'support-agent' },
   { id: 'seguridad_publica', name: 'Seguridad Pública', phone: '6311625050', icon: 'support-agent' },
   { id: 'imagen_urbana', name: 'Imagen Urbana', phone: '6311625065', icon: 'support-agent' },
-
 ];
+
+// Sanitiza a dígitos y +, y construye URL de marcado (abre marcador, NO llama)
+const toDialUrl = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
 const ServicesScreen: React.FC = () => {
   const [q, setQ] = useState('');
@@ -30,17 +32,19 @@ const ServicesScreen: React.FC = () => {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return SERVICES;
-    return SERVICES.filter(v => v.name.toLowerCase().includes(s));
+    return SERVICES.filter(v => v.name.toLowerCase().includes(s) || v.phone.includes(s));
   }, [q]);
 
   const call = async (phone: string) => {
     try {
-      const url = `tel:${phone}`;
+      const url = toDialUrl(phone); // tel: → abre la app de teléfono con el número
       const ok = await Linking.canOpenURL(url);
-      if (!ok) throw new Error('No se pudo iniciar la llamada');
+      if (!ok) throw new Error('No se pudo abrir el marcador');
       await Linking.openURL(url);
+      // NOTA: 'tel:' usa ACTION_DIAL en Android (no requiere permiso y no llama solo)
+      // En iOS abre el diálogo del teléfono para confirmar.
     } catch (e: any) {
-      Alert.alert('Llamada', e?.message || 'No se pudo iniciar la llamada');
+      Alert.alert('Llamada', e?.message || 'No se pudo abrir el marcador');
     }
   };
 
@@ -69,7 +73,13 @@ const ServicesScreen: React.FC = () => {
             </View>
           </View>
 
-          <Pressable style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.8 }]} onPress={() => call(s.phone)}>
+          <Pressable
+            onPress={() => call(s.phone)}
+            accessibilityRole="button"
+            accessibilityLabel={`Llamar a ${s.name}`}
+            style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.8 }]}
+            hitSlop={6}
+          >
             <MI name="call" size={20} color="#fff" />
           </Pressable>
         </View>
