@@ -11,7 +11,9 @@ import {
   Platform,
   Pressable,
   Dimensions,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../presentation/navigator/RootNavigator';
@@ -35,7 +37,40 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const onIngresar = () => navigation.navigate('Tabs');
+  const onIngresar = async () => {
+    const userTrim = rfc.trim();
+    const passTrim = password.trim();
+
+
+    // 🔐 Caso especial: autoridad -> Admin / admin
+    if (userTrim.toLowerCase() === 'admin' && passTrim === 'admin') {
+      const authUser = {
+        id: 'auth-001',
+        nombre: 'Administración',
+        email: 'admin@ciudamos.app',
+        role: 'autoridad' as const,
+        authorityAreas: ['Infraestructura', 'Seguridad'], // ajusta las áreas que debe ver
+      };
+      await AsyncStorage.setItem('user', JSON.stringify(authUser));
+      await AsyncStorage.setItem('authToken', 'token-demo');
+
+      // Ir directo a la pantalla de Autoridad y limpiar el stack
+      return navigation.reset({ index: 0, routes: [{ name: 'AuthorityReports' }] });
+    }
+
+    // 👤 Resto: ciudadano normal → Tabs
+    const citizenUser = {
+      id: `cit-${Date.now()}`,
+      nombre: userTrim,
+      email: `${userTrim.toLowerCase()}@ciudamos.app`,
+      role: 'ciudadano' as const,
+    };
+    await AsyncStorage.setItem('user', JSON.stringify(citizenUser));
+    await AsyncStorage.setItem('authToken', 'token-demo');
+
+    // Si ya usas tabs como home:
+    navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+  };
 
   return (
     <KeyboardAvoidingView
@@ -67,10 +102,10 @@ const LoginScreen: React.FC = () => {
           <TextInput
             value={rfc}
             onChangeText={setRfc}
-            placeholder="RFC"
+            placeholder="RFC / Usuario"
             placeholderTextColor={UI.muted}
             autoCorrect={false}
-            autoCapitalize="characters"
+            autoCapitalize="none"
             style={styles.inputField}
             returnKeyType="next"
           />
@@ -86,6 +121,7 @@ const LoginScreen: React.FC = () => {
             secureTextEntry={!showPassword}
             style={[styles.inputField, { paddingRight: 44 }]}
             returnKeyType="done"
+            onSubmitEditing={onIngresar}
           />
           <TouchableOpacity
             accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
@@ -138,7 +174,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     textAlign: 'center',
-    color: UI.primary, // mismo teal del título
+    color: UI.primary,
     fontFamily: 'Poppins-Medium',
   },
   subtitle: {
@@ -215,7 +251,7 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     position: 'absolute',
-    bottom: 90,        // fijo al fondo
+    bottom: 90,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -224,7 +260,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
   },
   footerLink: {
-    color: UI.primary, // mismo color que "Iniciar sesión"
+    color: UI.primary,
     fontFamily: 'Poppins-Medium',
     fontWeight: '800',
   },

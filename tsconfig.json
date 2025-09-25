@@ -1,8 +1,9 @@
-// tsconfig.json
 {
   "extends": "@react-native/typescript-config/tsconfig.json",
-  "include": [
-    "src",                // tu código TSX/TS
-    "declarations.d.ts"   // tu archivo de declaraciones para PNG/JPG
-  ]
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true
+  }
 }

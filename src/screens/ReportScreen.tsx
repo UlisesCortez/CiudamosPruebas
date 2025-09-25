@@ -207,16 +207,20 @@ const ReportScreen: React.FC = () => {
   const handleSubmit = async () => {
     if (!canSubmit || !coords) return;
 
-    addMarker({
-      id: Date.now().toString(),
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      title: category || 'Incidente',
-      description,
-      photoUri: (photo as any)?.uri,
-      color: getPinColor(urgency),
-      timestamp: new Date().toISOString(),
-    });
+// src/screens/ReportScreen.tsx  (fragmento donde confirmas el reporte)
+addMarker({
+  id: Date.now().toString(),
+  title: category,               // ⬅️ usa aquí tu estado real de tipo/categoría
+  description: description.trim(),
+  latitude: coords.latitude,
+  longitude: coords.longitude,
+  photoUri: imageUri ?? undefined,
+  timestamp: new Date().toISOString(), // evita “Invalid Date”
+  status: 'NUEVO',                     // “Enviado”
+});
+
+
+
 
     await notifee.displayNotification({
       title: '🚨 Nuevo incidente reportado',

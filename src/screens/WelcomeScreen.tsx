@@ -13,7 +13,7 @@ import {
   Animated,
   Linking,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Marker as RNMarker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import MI from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -37,6 +37,46 @@ const PANEL_INITIAL = Math.round(SCREEN_H * PANEL_INITIAL_FRACTION);
 // Estilo por defecto (sin personalización)
 const MAP_STYLE: any[] = [];
 
+/* =========================================================
+   Helpers de estado y fecha (CIUDADANO)
+   ========================================================= */
+const statusLabel: Record<NonNullable<ReportMarker['status']>, string> = {
+  NUEVO: 'Enviado',
+  VISTO: 'Visto',
+  EN_PROCESO: 'En proceso',
+  FINALIZADO: 'Finalizado',
+};
+
+const statusColor: Record<NonNullable<ReportMarker['status']>, string> = {
+  NUEVO: '#6B7280',       // gris
+  VISTO: '#3B82F6',       // azul
+  EN_PROCESO: '#F59E0B',  // ámbar
+  FINALIZADO: '#10B981',  // verde
+};
+
+const isValidDate = (d: Date) => !isNaN(d.getTime());
+const formatDate = (iso?: string) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isValidDate(d) ? d.toLocaleString() : '-';
+};
+
+const StatusPillCitizen = ({ status }: { status?: ReportMarker['status'] }) => {
+  const s = status ?? 'NUEVO';
+  const color = statusColor[s];
+  return (
+    <View
+      style={{
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: color + '22',
+      }}
+    >
+      <Text style={{ color, fontWeight: '700' }}>{statusLabel[s]}</Text>
+    </View>
+  );
+};
 
 /** ========== FAB RADIAL ========== */
 const FabRadial: React.FC<{
@@ -312,15 +352,15 @@ const WelcomeScreen: React.FC = () => {
         mapPadding={{ top: 88, right: 8, bottom: 24, left: 8 }}
       >
         {region && (
-          <Marker coordinate={region} anchor={{ x: 0.5, y: 0.5 }}>
+          <RNMarker coordinate={region} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.meOuter}>
               <View style={styles.meInner} />
             </View>
-          </Marker>
+          </RNMarker>
         )}
 
         {markers.map(m => (
-          <Marker
+          <RNMarker
             key={m.id}
             coordinate={{ latitude: m.latitude, longitude: m.longitude }}
             anchor={{ x: 0.5, y: 1 }}
@@ -330,7 +370,7 @@ const WelcomeScreen: React.FC = () => {
               <View style={[styles.pinHead, { backgroundColor: m.color || UI.primary }]} />
               <View style={[styles.pinStem, { borderTopColor: m.color || UI.primary }]} />
             </View>
-          </Marker>
+          </RNMarker>
         ))}
       </MapView>
 
@@ -357,30 +397,33 @@ const WelcomeScreen: React.FC = () => {
           <View style={{ padding: 16, paddingBottom: 24 }}>
             <View style={styles.handleBar} />
 
-            {/* Header */}
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>{selected.title || 'Incidente'}</Text>
-              <View style={styles.chip}>
-                <View style={[styles.dot, { backgroundColor: selected.color || UI.primary }]} />
-                <Text style={styles.chipText}>Activo</Text>
+            {/* ===== Encabezado del detalle con estado ===== */}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#0D1313' }}>
+                {selected?.title || 'Incidente'}
+              </Text>
+              <StatusPillCitizen status={selected?.status} />
+            </View>
+
+            {/* Meta primaria: fecha y coordenadas */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MI name="schedule" size={16} color="#6B7280" />
+                <Text style={{ color: '#6B7280' }}>
+                  {formatDate(selected?.timestamp)}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MI name="place" size={16} color="#6B7280" />
+                <Text style={{ color: '#6B7280' }}>
+                  {`${selected.latitude.toFixed(4)}, ${selected.longitude.toFixed(4)}`}
+                </Text>
               </View>
             </View>
 
-            {/* Meta */}
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <MI name="schedule" size={18} color="#6B7280" />
-                <Text style={styles.metaText}>
-                  {new Date(selected.timestamp).toLocaleString()}
-                </Text>
-              </View>
-              <View style={styles.metaItem}>
-                <MI name="place" size={18} color="#6B7280" />
-                <Text style={styles.metaText}>
-                  {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
-                </Text>
-              </View>
-            </View>
+            {/* ===== (Tu bloque de meta existente, pero con fecha formateada) ===== */}
 
             {/* Descripción (arriba de la imagen) */}
             {!!selected.description && (
