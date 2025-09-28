@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useContext } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Image, Platform, FlatList,
-  PermissionsAndroid, Dimensions, StatusBar, PanResponder, GestureResponderEvent, PanResponderGestureState
+  PermissionsAndroid, StatusBar, BackHandler, Animated, PanResponder, ScrollView, Dimensions
 } from 'react-native';
 import MapView, { Marker as RNMarker, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
@@ -11,6 +11,7 @@ import MI from 'react-native-vector-icons/MaterialIcons';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { MarkersContext, Marker } from '../context/MarkersContext';
 import { colors } from '../config/theme/theme';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 const UI = {
   bg: '#F4F7FC',
@@ -26,21 +27,24 @@ type UserAuth = {
   nombre: string;
   email: string;
   role: 'ciudadano' | 'autoridad';
-  authorityAreas?: string[]; // tipos visibles (p.ej. ['Seguridad','Infraestructura'])
+  authorityAreas?: string[];
 };
 
-const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('screen');
-const MIN_SHEET = Math.round(0.28 * SCREEN_H);
-const MAX_SHEET = Math.round(0.75 * SCREEN_H);
+const { height: SCREEN_H } = Dimensions.get('screen');
+
+// ===== Alturas del bottom sheet =====
+// Más bajo al colapsar (baja más): reduce este número si quieres que baje aún más.
+const MIN_SHEET_FRACTION = 0.36;   // antes: 0.48
+const MAX_SHEET_FRACTION = 0.82;   // altura expandida
+const MIN_SHEET = Math.round(SCREEN_H * MIN_SHEET_FRACTION);
+const MAX_SHEET = Math.round(SCREEN_H * MAX_SHEET_FRACTION);
 
 const norm = (s: string = '') =>
   s.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase();
 
-// Heurística por si aún no guardas urgency en el marker
 function inferUrgency(m: Marker): 'ALTA' | 'MEDIA' | 'BAJA' {
   const u = (m as any)?.urgency as ('ALTA'|'MEDIA'|'BAJA'|undefined);
   if (u === 'ALTA' || u === 'MEDIA' || u === 'BAJA') return u;
-
   const text = `${m.title ?? ''} ${m.description ?? ''}`.toLowerCase();
   const alta = ['balacera','arma','incendio','fuego','herido','asalto','explosion','explosión','derrumbe'];
   const media = ['bache','fuga','luz','semaforo','semáforo','poste','accidente','inundacion','inundación','choque'];
@@ -50,6 +54,7 @@ function inferUrgency(m: Marker): 'ALTA' | 'MEDIA' | 'BAJA' {
 }
 
 export default function AuthorityReportsScreen() {
+  const navigation = useNavigation<any>();
   const { markers, updateMarker } = useContext(MarkersContext);
   const mapRef = useRef<MapView | null>(null);
 
@@ -58,30 +63,79 @@ export default function AuthorityReportsScreen() {
   const [myPos, setMyPos] = useState<{ lat: number; lon: number } | null>(null);
   const [selected, setSelected] = useState<Marker | null>(null);
 
-  // filtro por urgencia
   const [urgencyFilter, setUrgencyFilter] =
     useState<'TODAS' | 'ALTA' | 'MEDIA' | 'BAJA'>('TODAS');
 
-  // bottom sheet drag
-  const [sheetH, setSheetH] = useState<number>(MIN_SHEET);
-  const startH = useRef<number>(MIN_SHEET);
+  // ===== Sheet animado (ancla abajo/arriba) =====
+  const sheetAnim = useRef(new Animated.Value(MIN_SHEET)).current;
+  const sheetHRef = useRef<number>(MIN_SHEET);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const listOffsetRef = useRef(0); // offset del FlatList
+
+  const snapTo = useCallback((to: number) => {
+    Animated.spring(sheetAnim, {
+      toValue: to,
+      useNativeDriver: false,
+      stiffness: 220,
+      damping: 24,
+      mass: 0.9,
+    }).start(() => {
+      sheetHRef.current = to;
+      setIsExpanded(to > (MIN_SHEET + MAX_SHEET) / 2);
+    });
+  }, [sheetAnim]);
+
+  // Gestos
+  const DRAG_THRESHOLD = 5;
+  const VEL_SNAP = 0.6;
+  const TOP_GESTURE_ZONE = 42;
+  const startH = useRef(MIN_SHEET);
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => { startH.current = sheetH; },
-      onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+      onStartShouldSetPanResponderCapture: e => {
+        const y = (e.nativeEvent as any).locationY ?? 0;
+        if (y <= TOP_GESTURE_ZONE) return true;                 // tocar el handle
+        if (isExpanded && listOffsetRef.current <= 0) return true; // expandido y lista arriba
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: (_e, g) => {
+        const isVertical = Math.abs(g.dy) > Math.abs(g.dx);
+        if (!isVertical || Math.abs(g.dy) <= DRAG_THRESHOLD) return false;
+        if (sheetHRef.current === MIN_SHEET && g.dy < 0) return true; // colapsado -> subir
+        if (sheetHRef.current === MAX_SHEET && listOffsetRef.current <= 0 && g.dy > 0) return true; // expandido -> bajar
+        return false;
+      },
+      onPanResponderGrant: () => { startH.current = sheetHRef.current; },
+      onPanResponderMove: (_e, g) => {
         const next = clamp(startH.current - g.dy, MIN_SHEET, MAX_SHEET);
-        setSheetH(next);
+        sheetAnim.setValue(next);
       },
       onPanResponderRelease: (_e, g) => {
         const mid = (MIN_SHEET + MAX_SHEET) / 2;
-        const projected = clamp(startH.current - g.dy + g.vy * 60, MIN_SHEET, MAX_SHEET);
-        setSheetH(projected < mid ? MIN_SHEET : MAX_SHEET);
+        if (Math.abs(g.vy) > VEL_SNAP) {
+          snapTo(g.vy < 0 ? MAX_SHEET : MIN_SHEET);
+          return;
+        }
+        const projected = clamp(startH.current - g.dy + g.vy * 80, MIN_SHEET, MAX_SHEET);
+        snapTo(projected < mid ? MIN_SHEET : MAX_SHEET);
       },
+      onPanResponderTerminationRequest: () => false,
     })
   ).current;
+
+  // 🔙 Atrás -> Login
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBack = () => {
+        navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [navigation])
+  );
 
   // cargar usuario autoridad
   useEffect(() => {
@@ -127,22 +181,35 @@ export default function AuthorityReportsScreen() {
     })();
   }, []);
 
-  // filtrar por tipo/categoría (usa title existente)
+  // Normaliza áreas
   const areasNorm = useMemo(() => areas.map(norm), [areas]);
 
+  // Base: si no hay áreas -> todos
   const myReportsBase = useMemo(() => {
-    if (!areasNorm.length) return [];
-    return markers
-      .filter(m => m.title && areasNorm.includes(norm(m.title)))
-      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    const list = [...markers].sort((a, b) =>
+      (b.timestamp || '').localeCompare(a.timestamp || '')
+    );
+
+    if (!areasNorm.length) return list;
+    const wantsAll = areasNorm.some(v => v === 'todos' || v === 'all' || v === '*');
+    if (wantsAll) return list;
+
+    return list.filter(m => {
+      const t = norm(m.title ?? '');
+      const a = norm((m as any).area ?? '');
+      const hasCategory = Boolean(t || a);
+      const match = areasNorm.includes(t) || areasNorm.includes(a);
+      return match || !hasCategory;
+    });
   }, [markers, areasNorm]);
 
-  // aplicar filtro de urgencia
+  // Filtro por urgencia
   const myReports = useMemo(() => {
     if (urgencyFilter === 'TODAS') return myReportsBase;
     return myReportsBase.filter(m => inferUrgency(m) === urgencyFilter);
   }, [myReportsBase, urgencyFilter]);
 
+  // Recentrar
   const handleRecenter = useCallback(() => {
     if (!mapRef.current || !myPos) return;
     mapRef.current.animateToRegion({
@@ -153,25 +220,16 @@ export default function AuthorityReportsScreen() {
     }, 300);
   }, [myPos]);
 
-  // marcar VISTO al abrir detalle
-// ✅ Marca VISTO una sola vez cuando cambie el reporte seleccionado
-useEffect(() => {
-  if (!selected?.id) return;
+  // Marcar VISTO al abrir detalle (una sola vez)
+  useEffect(() => {
+    if (!selected?.id) return;
+    if (selected.status && selected.status !== 'NUEVO') return;
+    updateMarker(selected.id, { status: 'VISTO' });
+    setSelected(s => (s ? { ...s, status: 'VISTO' } : s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
 
-  // si ya no está NUEVO, no hagas nada
-  if (selected.status && selected.status !== 'NUEVO') return;
-
-  // actualiza en store
-  updateMarker(selected.id, { status: 'VISTO' });
-
-  // optimista: actualiza el seleccionado local para evitar re-disparos
-  setSelected(s => (s ? { ...s, status: 'VISTO' } : s));
-
-// 👇 OJO: Dependemos SOLO del id seleccionado para que no se re-ejecute por cambios en updateMarker
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [selected?.id]);
-
-  // acciones autoridad
+  // Acciones autoridad
   const setEnProceso = useCallback(() => {
     if (!selected) return;
     if (selected.status === 'FINALIZADO') return;
@@ -189,19 +247,7 @@ useEffect(() => {
     setSelected(prev => (prev ? { ...prev, status: 'FINALIZADO', evidenceUri: asset.uri } : prev));
   }, [selected, updateMarker]);
 
-  const renderMarker = (m: Marker) => (
-    <RNMarker
-      key={m.id}
-      coordinate={{ latitude: m.latitude, longitude: m.longitude }}
-      onPress={() => setSelected(m)}
-    >
-      <View style={styles.pin}>
-        <View style={[styles.pinHead, { backgroundColor: m.color || UI.primary }]} />
-        <View style={[styles.pinTip, { borderTopColor: m.color || UI.primary }]} />
-      </View>
-    </RNMarker>
-  );
-
+  // UI helpers
   const StatusPill = ({ status }: { status?: Marker['status'] }) => {
     const s = status || 'NUEVO';
     const color =
@@ -237,7 +283,6 @@ useEffect(() => {
     </Pressable>
   );
 
-  // etiqueta legible del filtro activo
   const labelUrg = urgencyFilter === 'TODAS'
     ? 'Todas'
     : urgencyFilter[0] + urgencyFilter.slice(1).toLowerCase();
@@ -246,7 +291,7 @@ useEffect(() => {
     <View style={styles.root}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
 
-      {/* MAPA full */}
+      {/* MAPA */}
       {region && (
         <MapView
           ref={(ref) => { mapRef.current = ref; }}
@@ -264,11 +309,22 @@ useEffect(() => {
               </View>
             </RNMarker>
           )}
-          {myReports.map(renderMarker)}
+          {myReports.map(m => (
+            <RNMarker
+              key={m.id}
+              coordinate={{ latitude: m.latitude, longitude: m.longitude }}
+              onPress={() => setSelected(m)}
+            >
+              <View style={styles.pin}>
+                <View style={[styles.pinHead, { backgroundColor: m.color || UI.primary }]} />
+                <View style={[styles.pinTip, { borderTopColor: m.color || UI.primary }]} />
+              </View>
+            </RNMarker>
+          ))}
         </MapView>
       )}
 
-      {/* TOP OVERLAYS (para que no se vea vacío) */}
+      {/* Pills superiores */}
       <View style={styles.topRow}>
         <View style={styles.glassPill}>
           <MI name="assignment" size={16} color={UI.text} />
@@ -280,105 +336,131 @@ useEffect(() => {
         </View>
       </View>
 
-      {/* FAB recentrar */}
+      {/* FAB Recentrar */}
       <Pressable style={styles.fab} onPress={handleRecenter}>
         <MI name="my-location" size={22} color="#FFF" />
       </Pressable>
 
-      {/* BOTTOM SHEET */}
-      <View style={[styles.bottomSheet, { height: sheetH }]}>
-        <View style={styles.dragHandle} {...panResponder.panHandlers}>
+      {/* ===== BOTTOM SHEET ===== */}
+      <Animated.View
+        style={[styles.bottomSheet, { height: sheetAnim }]}
+        {...panResponder.panHandlers}
+      >
+        <Pressable
+          onPress={() => snapTo(sheetHRef.current === MIN_SHEET ? MAX_SHEET : MIN_SHEET)}
+          style={styles.dragHandle}
+          hitSlop={8}
+        >
           <View style={styles.dragBar} />
-        </View>
+        </Pressable>
 
         <View style={styles.bsHeader}>
           <Text style={styles.bsTitle}>Reportes</Text>
           <Text style={styles.bsCount}>{myReports.length}</Text>
         </View>
 
+        {/* Chips */}
+        <View style={styles.chipsRow}>
+          {(['TODAS','ALTA','MEDIA','BAJA'] as const).map(v => (
+            <Pressable
+              key={v}
+              onPress={() => setUrgencyFilter(v)}
+              style={[styles.chip, urgencyFilter === v ? styles.chipActive : null]}
+            >
+              <Text style={[styles.chipTxt, urgencyFilter === v ? styles.chipTxtActive : null]}>
+                {v === 'TODAS' ? 'Todas' : v}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         <FlatList
           data={myReports}
           keyExtractor={(x) => x.id}
           renderItem={ListItem}
-          ListHeaderComponent={
-            <View style={styles.chipsRow}>
-              {(['TODAS','ALTA','MEDIA','BAJA'] as const).map(v => (
-                <Pressable
-                  key={v}
-                  onPress={() => setUrgencyFilter(v)}
-                  style={[
-                    styles.chip,
-                    urgencyFilter === v ? styles.chipActive : null,
-                  ]}
-                >
-                  <Text style={[
-                    styles.chipTxt,
-                    urgencyFilter === v ? styles.chipTxtActive : null,
-                  ]}>
-                    {v === 'TODAS' ? 'Todas' : v[0] + v.slice(1).toLowerCase()}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          }
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: 12 }}
           ListEmptyComponent={<Text style={styles.empty}>No hay reportes para este filtro.</Text>}
           showsVerticalScrollIndicator
+          scrollEnabled={isExpanded}
+          onScroll={({ nativeEvent }) => {
+            listOffsetRef.current = nativeEvent.contentOffset?.y ?? 0;
+          }}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
         />
-      </View>
+      </Animated.View>
 
-      {/* PANEL DETALLE */}
+      {/* ===== PANEL DETALLE ===== */}
       {selected && (
-        <View style={[styles.detailSheet, { bottom: sheetH + 12 }]}>
-          <View style={styles.detailHeader}>
-            <Text style={styles.detailTitle}>{selected.title || 'Incidente'}</Text>
-            <Pressable onPress={() => setSelected(null)} hitSlop={8}>
-              <MI name="close" size={22} color={UI.muted} />
-            </Pressable>
-          </View>
-          <Text style={styles.detailMeta}>
-            {new Date(selected.timestamp || Date.now()).toLocaleString()}
-          </Text>
-          {selected.photoUri ? (
-            <Image source={{ uri: selected.photoUri }} style={styles.detailImg} />
-          ) : (
-            <View style={[styles.detailImg, styles.thumbEmpty]}>
-              <MI name="image-not-supported" size={28} color={UI.muted} />
+        <Animated.View
+          style={[
+            styles.detailSheet,
+            {
+              bottom: Animated.add(sheetAnim, new Animated.Value(12)),
+              maxHeight: SCREEN_H * 0.56,
+            },
+          ]}
+        >
+          <ScrollView showsVerticalScrollIndicator contentContainerStyle={{ paddingBottom: 8 }}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>{selected.title || 'Incidente'}</Text>
+              <Pressable onPress={() => setSelected(null)} hitSlop={8}>
+                <MI name="close" size={22} color={UI.muted} />
+              </Pressable>
             </View>
-          )}
-          {selected.description && (
-            <>
-              <Text style={styles.label}>Descripción</Text>
-              <Text style={styles.detailDesc}>{selected.description}</Text>
-            </>
-          )}
-          {(selected as any)?.evidenceUri && (
-            <>
-              <Text style={styles.label}>Evidencia</Text>
-              <Image source={{ uri: (selected as any).evidenceUri }} style={[styles.detailImg, { borderColor: '#10B981' }]} />
-            </>
-          )}
-          <View style={styles.detailStatusRow}>
-            <Text style={styles.label}>Estado</Text>
-            <StatusPill status={selected.status} />
-          </View>
-          <View style={styles.actionsRow}>
-            <Pressable
-              onPress={setEnProceso}
-              disabled={selected.status === 'FINALIZADO'}
-              style={[styles.btn, { backgroundColor: '#F59E0B' + (selected.status === 'FINALIZADO' ? '66' : '') }]}
-            >
-              <Text style={styles.btnTxt}>En proceso</Text>
-            </Pressable>
-            <Pressable
-              onPress={finalizarConEvidencia}
-              disabled={selected.status === 'FINALIZADO'}
-              style={[styles.btn, { backgroundColor: '#10B981' + (selected.status === 'FINALIZADO' ? '66' : '') }]}
-            >
-              <Text style={styles.btnTxt}>Finalizar (+foto)</Text>
-            </Pressable>
-          </View>
-        </View>
+
+            <Text style={styles.detailMeta}>
+              {new Date(selected.timestamp || Date.now()).toLocaleString()}
+            </Text>
+
+            {selected.photoUri ? (
+              <Image source={{ uri: selected.photoUri }} style={styles.detailImg} />
+            ) : (
+              <View style={[styles.detailImg, styles.thumbEmpty]}>
+                <MI name="image-not-supported" size={28} color={UI.muted} />
+              </View>
+            )}
+
+            {!!selected.description && (
+              <>
+                <Text style={styles.label}>Descripción</Text>
+                <Text style={styles.detailDesc}>{selected.description}</Text>
+              </>
+            )}
+
+            {(selected as any)?.evidenceUri && (
+              <>
+                <Text style={styles.label}>Evidencia</Text>
+                <Image
+                  source={{ uri: (selected as any).evidenceUri }}
+                  style={[styles.detailImg, { borderColor: '#10B981' }]}
+                />
+              </>
+            )}
+
+            <View style={styles.detailStatusRow}>
+              <Text style={styles.label}>Estado</Text>
+              <StatusPill status={selected.status} />
+            </View>
+
+            <View style={styles.actionsRow}>
+              <Pressable
+                onPress={setEnProceso}
+                disabled={selected.status === 'FINALIZADO'}
+                style={[styles.btn, { backgroundColor: '#F59E0B' + (selected.status === 'FINALIZADO' ? '66' : '') }]}
+              >
+                <Text style={styles.btnTxt}>En proceso</Text>
+              </Pressable>
+              <Pressable
+                onPress={finalizarConEvidencia}
+                disabled={selected.status === 'FINALIZADO'}
+                style={[styles.btn, { backgroundColor: '#10B981' + (selected.status === 'FINALIZADO' ? '66' : '') }]}
+              >
+                <Text style={styles.btnTxt}>Finalizar (+foto)</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </Animated.View>
       )}
     </View>
   );
@@ -387,7 +469,7 @@ useEffect(() => {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
 
-  // --- Top glass pills (para que no se vea vacío) ---
+  // Top pills
   topRow: {
     position: 'absolute',
     top: (StatusBar.currentHeight || 10) + 10,
@@ -414,7 +496,7 @@ const styles = StyleSheet.create({
   pinHead: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#FFF' },
   pinTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 9, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
 
-  // my location
+  // Ubicación usuario
   meDotOuter: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: UI.primary },
   meDotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: UI.primary },
 
@@ -428,8 +510,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderColor: UI.border,
     paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8,
   },
-  dragHandle: { alignItems: 'center', paddingVertical: 6 },
-  dragBar: { width: 46, height: 5, borderRadius: 5, backgroundColor: '#D1D5DB' },
+  dragHandle: { alignItems: 'center', paddingVertical: 8 },
+  dragBar: { width: 56, height: 5, borderRadius: 5, backgroundColor: '#D1D5DB' },
 
   bsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 8 },
   bsTitle: { fontSize: 14, fontWeight: '700', color: UI.text },
@@ -450,7 +532,7 @@ const styles = StyleSheet.create({
   chipTxt: { fontWeight: '700', color: UI.text },
   chipTxtActive: { color: '#fff' },
 
-  // List item
+  // Lista
   item: { backgroundColor: UI.card, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: UI.border, marginVertical: 6 },
   thumb: { width: 52, height: 52, borderRadius: 8 },
   thumbEmpty: { backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' },
@@ -459,7 +541,7 @@ const styles = StyleSheet.create({
   desc: { fontSize: 13, color: UI.text, marginTop: 4 },
   empty: { textAlign: 'center', color: UI.muted, marginTop: 10 },
 
-  // Detail sheet
+  // Detalle
   detailSheet: {
     position: 'absolute', left: 12, right: 12,
     backgroundColor: UI.card, borderRadius: 16,

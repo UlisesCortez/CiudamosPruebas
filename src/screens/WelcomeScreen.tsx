@@ -12,11 +12,12 @@ import {
   Pressable,
   Animated,
   Linking,
+  BackHandler,
 } from 'react-native';
 import MapView, { Marker as RNMarker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import MI from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker';
 import Toast from 'react-native-toast-message';
@@ -30,8 +31,8 @@ const UI = { primary: '#0AC5C5' };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // ===== Ajustes rápidos =====
-const FAB_EXTRA_BOTTOM = 96;                 // Sube/baja la burbuja (FAB)
-const PANEL_INITIAL_FRACTION = 0.65;         // Alto inicial del panel (65% de pantalla)
+const FAB_EXTRA_BOTTOM = 96;
+const PANEL_INITIAL_FRACTION = 0.65;
 const PANEL_INITIAL = Math.round(SCREEN_H * PANEL_INITIAL_FRACTION);
 
 // Estilo por defecto (sin personalización)
@@ -48,10 +49,10 @@ const statusLabel: Record<NonNullable<ReportMarker['status']>, string> = {
 };
 
 const statusColor: Record<NonNullable<ReportMarker['status']>, string> = {
-  NUEVO: '#6B7280',       // gris
-  VISTO: '#3B82F6',       // azul
-  EN_PROCESO: '#F59E0B',  // ámbar
-  FINALIZADO: '#10B981',  // verde
+  NUEVO: '#6B7280',
+  VISTO: '#3B82F6',
+  EN_PROCESO: '#F59E0B',
+  FINALIZADO: '#10B981',
 };
 
 const isValidDate = (d: Date) => !isNaN(d.getTime());
@@ -165,6 +166,18 @@ const WelcomeScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ReportMarker | null>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+
+  // Manejo de botón "atrás": regresar siempre a Login
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBack = () => {
+        navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [navigation])
+  );
 
   /* ===== permisos y acciones cámara/galería ===== */
   const requestCameraPermission = async () => {
@@ -395,10 +408,9 @@ const WelcomeScreen: React.FC = () => {
       {selected && (
         <ButtonSheet onClose={() => setSelected(null)} initialHeight={PANEL_INITIAL}>
           <View style={{ padding: 16, paddingBottom: 24 }}>
-            <View style={styles.handleBar} />
+            {/* Se quita la barra manual; usa la del ButtonSheet */}
 
             {/* ===== Encabezado del detalle con estado ===== */}
-
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#0D1313' }}>
                 {selected?.title || 'Incidente'}
@@ -422,8 +434,6 @@ const WelcomeScreen: React.FC = () => {
                 </Text>
               </View>
             </View>
-
-            {/* ===== (Tu bloque de meta existente, pero con fecha formateada) ===== */}
 
             {/* Descripción (arriba de la imagen) */}
             {!!selected.description && (
@@ -510,10 +520,6 @@ const styles = StyleSheet.create({
   },
   fabItem: { position: 'absolute', right: 20, bottom: 52, alignItems: 'center' },
 
-  handleBar: {
-    width: 44, height: 4, borderRadius: 2, backgroundColor: '#D7DDE5',
-    alignSelf: 'center', marginBottom: 8,
-  },
   panelTitle: { fontSize: 20, fontWeight: '800', color: '#0D1313' },
   panelDesc: { fontSize: 16, color: '#1f2937', marginTop: 6 },
 

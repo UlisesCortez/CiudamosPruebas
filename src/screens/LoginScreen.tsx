@@ -11,7 +11,6 @@ import {
   Platform,
   Pressable,
   Dimensions,
-  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -41,34 +40,33 @@ const LoginScreen: React.FC = () => {
     const userTrim = rfc.trim();
     const passTrim = password.trim();
 
-
-    // 🔐 Caso especial: autoridad -> Admin / admin
+    // 🔐 Autoridad: Admin/admin -> ver TODOS los reportes
     if (userTrim.toLowerCase() === 'admin' && passTrim === 'admin') {
       const authUser = {
         id: 'auth-001',
         nombre: 'Administración',
         email: 'admin@ciudamos.app',
         role: 'autoridad' as const,
-        authorityAreas: ['Infraestructura', 'Seguridad'], // ajusta las áreas que debe ver
+        // 👇 comodín para ver todos los tipos/áreas en AuthorityReportsScreen
+        authorityAreas: ['*'],
       };
       await AsyncStorage.setItem('user', JSON.stringify(authUser));
       await AsyncStorage.setItem('authToken', 'token-demo');
 
-      // Ir directo a la pantalla de Autoridad y limpiar el stack
-      return navigation.reset({ index: 0, routes: [{ name: 'AuthorityReports' }] });
+      navigation.reset({ index: 0, routes: [{ name: 'AuthorityReports' }] });
+      return;
     }
 
-    // 👤 Resto: ciudadano normal → Tabs
+    // 👤 Ciudadano normal
     const citizenUser = {
       id: `cit-${Date.now()}`,
-      nombre: userTrim,
-      email: `${userTrim.toLowerCase()}@ciudamos.app`,
+      nombre: userTrim || 'Ciudadano',
+      email: `${(userTrim || 'ciudadano').toLowerCase()}@ciudamos.app`,
       role: 'ciudadano' as const,
     };
     await AsyncStorage.setItem('user', JSON.stringify(citizenUser));
     await AsyncStorage.setItem('authToken', 'token-demo');
 
-    // Si ya usas tabs como home:
     navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
   };
 
@@ -77,27 +75,21 @@ const LoginScreen: React.FC = () => {
       style={{ flex: 1, backgroundColor: UI.bg }}
       behavior={Platform.select({ ios: 'padding', android: undefined })}
     >
-      {/* Usamos minHeight=SCREEN_H para que el footer NO se mueva con el teclado */}
       <View style={[styles.container, { minHeight: SCREEN_H }]}>
-        {/* Logo */}
         <Image
           source={require('../presentation/assets/images/Logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
 
-        {/* Título sin degradado */}
         <Text style={styles.title}>Iniciar sesión</Text>
 
-        {/* Subtítulo */}
         <Text style={styles.subtitle}>
           Accede para reportar y seguir incidentes en tu zona.
         </Text>
 
-        {/* Línea divisora suave */}
         <View style={styles.hr} />
 
-        {/* RFC */}
         <View style={styles.inputWrap}>
           <TextInput
             value={rfc}
@@ -111,7 +103,6 @@ const LoginScreen: React.FC = () => {
           />
         </View>
 
-        {/* Contraseña */}
         <View style={[styles.inputWrap, { marginTop: 12 }]}>
           <TextInput
             value={password}
@@ -133,15 +124,12 @@ const LoginScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* ¿Olvidaste tu contraseña? */}
         <Text style={styles.linkRight}>¿Olvidaste tu contraseña?</Text>
 
-        {/* Botón "Ingresar" estilo píldora teal */}
         <Pressable style={styles.primaryBtn} onPress={onIngresar}>
           <Text style={styles.primaryTxt}>Ingresar</Text>
         </Pressable>
 
-        {/* Footer fijo (no se mueve) */}
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>¿No tienes cuenta?</Text>
           <Pressable onPress={() => navigation.navigate('Register')}>
@@ -224,7 +212,7 @@ const styles = StyleSheet.create({
     color: UI.muted,
     alignSelf: 'flex-end',
     marginTop: 10,
-    marginRight: (Platform.OS === 'android' ? 2 : 0),
+    marginRight: Platform.OS === 'android' ? 2 : 0,
     fontFamily: 'Poppins-Medium',
   },
   primaryBtn: {
